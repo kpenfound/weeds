@@ -1,0 +1,4 @@
+---
+name: unmarked
+---
+Avoid # noqa

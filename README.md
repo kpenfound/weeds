@@ -45,6 +45,33 @@ exception evaluator driven by `weeds.toml`.
 | `go-lint` | A pinned golangci-lint preset, once per Go module. |
 | `installed-skills` | The installed skill folders equal the installer's output. |
 
+### suppressions
+
+A text scan over every file kind. It reports each line that holds one of
+`//nolint`, `lint:ignore`, `eslint-disable`, `@ts-expect-error`, `@ts-ignore`,
+`@ts-nocheck`, `ast-grep-ignore` or `# noqa`, one finding per directive per
+line, under a rule named for the directive (`nolint`, `lint-ignore`,
+`eslint-disable`, `ts-expect-error`, `ts-ignore`, `ts-nocheck`,
+`ast-grep-ignore`, `noqa`). Generated files are scanned like any other. Only a
+named exception in `weeds.toml` clears a finding; no inline text does.
+
+### markdown
+
+Markdown files (`.md`, `.markdown`, `.mdx`) are reported under the rule
+`internal-markdown`, except these, which are always allowed:
+
+- README, AGENTS, CLAUDE, CONTRIBUTING, LICENSE, changelog and release-notes
+  files, matched on the lowercased file name without its extension, so
+  `claude.md` passes and `AGENTS-design.md` does not;
+- anything under a `docs/` directory;
+- anything under `testdata/` or a test fixture directory (`fixtures`,
+  `__fixtures__` and similar);
+- Weeds-owned skill folders (see below).
+
+Any other markdown file is a finding unless the `weeds.toml` markdown
+allowlist names it. An allowlist entry that matches no markdown file needing
+it, including one that names an always-allowed file, is stale and fails.
+
 ### Scanning
 
 The scanning checks (`suppressions`, `markdown`, `comments`) share one walk of

@@ -1,0 +1,4 @@
+gen.go:5: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+silenced.go:3: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+weeds.js:1: eslint-disable: inline suppression eslint-disable is not allowed; fix the code, or name an exception in weeds.toml
+weeds.js:2: eslint-disable: inline suppression eslint-disable is not allowed; fix the code, or name an exception in weeds.toml

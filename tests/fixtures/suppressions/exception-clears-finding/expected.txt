@@ -1,0 +1,1 @@
+src/new.go:3: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml

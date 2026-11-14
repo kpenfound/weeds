@@ -1,6 +1,6 @@
-let suppressionsRules: [String!]! = []
+let suppressionsRules: [String!]! = suppressionDirectives.map { d => d.rule }
 
-let markdownRules: [String!]! = []
+let markdownRules: [String!]! = [markdownRule]
 
 let commentsRules: [String!]! = []
 

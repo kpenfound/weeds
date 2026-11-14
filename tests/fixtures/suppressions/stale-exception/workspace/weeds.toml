@@ -1,0 +1,4 @@
+[[exceptions]]
+check = "suppressions"
+paths = ["gone/**"]
+reason = "nothing lives here any more"

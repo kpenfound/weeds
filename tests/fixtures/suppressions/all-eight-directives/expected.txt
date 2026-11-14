@@ -1,0 +1,8 @@
+app.js:2: eslint-disable: inline suppression eslint-disable is not allowed; fix the code, or name an exception in weeds.toml
+legacy.ts:1: ts-nocheck: inline suppression @ts-nocheck is not allowed; fix the code, or name an exception in weeds.toml
+main.go:4: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+rules/ignore.yml:2: ast-grep-ignore: inline suppression ast-grep-ignore is not allowed; fix the code, or name an exception in weeds.toml
+script.py:3: noqa: inline suppression # noqa is not allowed; fix the code, or name an exception in weeds.toml
+staticcheck.go:3: lint-ignore: inline suppression lint:ignore is not allowed; fix the code, or name an exception in weeds.toml
+types.ts:2: ts-expect-error: inline suppression @ts-expect-error is not allowed; fix the code, or name an exception in weeds.toml
+types.ts:4: ts-ignore: inline suppression @ts-ignore is not allowed; fix the code, or name an exception in weeds.toml

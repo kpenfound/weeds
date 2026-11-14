@@ -80,6 +80,61 @@ type Weeds {
     "no findings"
   }
 
+  """
+  The suppressions check's findings after the shared exceptions: one line per
+  finding, or "no findings".
+  """
+  pub suppressionsReport: String! {
+    reportOf(suppressionsOutcome)
+  }
+
+  """
+  No inline suppression directive (the eight forms listed in suppressions.dang)
+  in any scanned file. Only a named weeds.toml exception clears a finding.
+  """
+  pub suppressions: Void @check {
+    fail(suppressionsOutcome)
+  }
+
+  """
+  The markdown check's findings after the allowlist and exceptions: one line
+  per finding, or "no findings".
+  """
+  pub markdownReport: String! {
+    reportOf(markdownOutcome)
+  }
+
+  """
+  No internal markdown beyond the always-allowed set and the weeds.toml
+  markdown allowlist; a stale allowlist entry fails.
+  """
+  pub markdown: Void @check {
+    fail(markdownOutcome)
+  }
+
+  let suppressionsOutcome: [Finding!]! {
+    applyExceptions("suppressions", suppressionHits(source, scanFiles), settings)
+  }
+
+  let markdownOutcome: [Finding!]! {
+    markdownFindings(scanFiles, settings)
+  }
+
+  let reportOf(found: [Finding!]!): String! {
+    if (found.isEmpty) {
+      "no findings"
+    } else {
+      renderFindings(found)
+    }
+  }
+
+  let fail(found: [Finding!]!): Void {
+    if (!found.isEmpty) {
+      raise renderFindings(found)
+    }
+    null
+  }
+
   let verdict(check: String!, found: [Finding!]!): Void {
     let remaining = applyExceptions(check, found, settings)
     if (!remaining.isEmpty) {

@@ -1,1 +1,6 @@
 # Weeds' own exceptions: named entries only, each one must still match something.
+
+[[exceptions]]
+check = "suppressions"
+paths = ["suppressions.dang", "README.md", "tests/fixtures/**"]
+reason = "the directive list, the docs and the fixtures quote or hold real directives"

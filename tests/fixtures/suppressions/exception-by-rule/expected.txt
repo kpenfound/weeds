@@ -1,0 +1,2 @@
+a.ts:3: ts-nocheck: inline suppression @ts-nocheck is not allowed; fix the code, or name an exception in weeds.toml
+b.js:1: ts-ignore: inline suppression @ts-ignore is not allowed; fix the code, or name an exception in weeds.toml

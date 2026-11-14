@@ -125,6 +125,46 @@ type WeedsTests {
     null
   }
 
+  """
+  The suppressions check over fixture workspaces: each directive, hidden and
+  gitignored files, skipped locations, named exceptions.
+  """
+  pub suppressions: Void @check {
+    runSuite("suppressions")
+  }
+
+  """
+  The markdown check over fixture workspaces: always-allowed categories, the
+  allowlist, stale entries and skills-looking folders without a marker.
+  """
+  pub markdown: Void @check {
+    runSuite("markdown")
+  }
+
+  """
+  The suppressions scan skips .git, vendor, node_modules and an owned skill
+  folder, but reads a skills-looking folder whose marker is wrong. The
+  directive text is built at run time so this file holds none.
+  """
+  pub suppressionsSkips: Void @check {
+    let marker = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).ownerMarker
+    let directive = "/" + "/nolint\n"
+    let tree = directory
+      .withNewFile(".git/hooks/pre-commit", directive)
+      .withNewFile("vendor/pkg/a.go", directive)
+      .withNewFile("node_modules/m/index.js", directive)
+      .withNewFile("sub/vendor/b.go", directive)
+      .withNewFile(".agents/skills/owned/SKILL.md", directive)
+      .withNewFile(".agents/skills/owned/.weeds-managed", marker)
+      .withNewFile(".claude/skills/imposter/SKILL.md", directive)
+      .withNewFile(".claude/skills/imposter/.weeds-managed", "someone else\n")
+      .withNewFile("src/main.go", "package main\n")
+    let report = weeds(ws: tree.asWorkspace).suppressionsReport
+    let expected = ".claude/skills/imposter/SKILL.md:1: nolint: inline suppression /" + "/nolint is not allowed; fix the code, or name an exception in weeds.toml"
+    expect(report == expected, "only the unmarked folder may be reported; got:\n" + report)
+    null
+  }
+
   let runSuite(suite: String!): Void {
     let names = fixtures.entries(path: suite).map { entry => entry.trimSuffix("/") }
     if (names.isEmpty) {
@@ -189,6 +229,8 @@ type WeedsTests {
       } else {
         subject.settingsReport
       }
+      "suppressions" => subject.suppressionsReport
+      "markdown" => subject.markdownReport
       else => raise "no report is registered for suite " + suite
     }
   }

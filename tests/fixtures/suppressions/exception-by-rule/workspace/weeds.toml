@@ -1,0 +1,3 @@
+[[exceptions]]
+rule = "ts-ignore"
+paths = ["**/*.ts"]

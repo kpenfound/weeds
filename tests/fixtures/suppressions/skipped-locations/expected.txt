@@ -1,0 +1,2 @@
+.agents/skills/unmarked/SKILL.md:4: noqa: inline suppression # noqa is not allowed; fix the code, or name an exception in weeds.toml
+.claude/skills/imposter/SKILL.md:1: ts-nocheck: inline suppression @ts-nocheck is not allowed; fix the code, or name an exception in weeds.toml
