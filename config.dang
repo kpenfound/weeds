@@ -36,6 +36,10 @@ type BaselineEntry {
   symbol: String! = ""
   reason: String! = ""
   line: Int! = 1
+
+  matches(finding: Finding!): Boolean! {
+    linter == finding.rule and path == finding.path and (symbol == "" or symbol == baselineSymbolOf(finding))
+  }
 }
 
 type Settings {

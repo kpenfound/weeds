@@ -112,8 +112,52 @@ type Weeds {
     fail(markdownOutcome)
   }
 
+  """
+  The pinned golangci-lint image reference, by tag and sha256 digest.
+  """
+  pub goLintImageRef: String! {
+    goLintImage
+  }
+
+  """
+  The golangci-lint configuration Weeds generates and passes with --config.
+  """
+  pub goLintPresetText: String! {
+    goLintPreset
+  }
+
+  """
+  The Go module directories go-lint runs in, sorted: every go.mod outside
+  vendor, testdata and node_modules whose module holds Go files. "." is the
+  workspace root.
+  """
+  pub goLintModules: [String!]! {
+    goModules(scanFiles)
+  }
+
+  """
+  The go-lint check's findings after the baseline and exceptions: one line
+  per finding, or "no findings".
+  """
+  pub goLintReport: String! {
+    reportOf(goLintOutcome)
+  }
+
+  """
+  golangci-lint, once per Go module, with the Weeds preset: correctness, dead
+  code, godox and complexity findings. Only complexity findings can be
+  baselined in weeds.toml, and a baseline entry that matches nothing fails.
+  """
+  pub goLint: Void @check {
+    fail(goLintOutcome)
+  }
+
   let suppressionsOutcome: [Finding!]! {
     applyExceptions("suppressions", suppressionHits(source, scanFiles), settings)
+  }
+
+  let goLintOutcome: [Finding!]! {
+    goLintFindings(source, scanFiles, settings)
   }
 
   let markdownOutcome: [Finding!]! {

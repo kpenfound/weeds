@@ -1,0 +1,19 @@
+[[go-lint.baseline]]
+linter = "gocognit"
+path = "worker/sum.go"
+symbol = "Sum"
+
+[[go-lint.baseline]]
+linter = "gocognit"
+path = "worker/sum.go"
+symbol = "Renamed"
+
+[[go-lint.baseline]]
+linter = "funlen"
+path = "worker/nest.go"
+symbol = "Classify"
+
+[[go-lint.baseline]]
+linter = "nestif"
+path = "worker/gone.go"
+symbol = "Classify"

@@ -1,0 +1,7 @@
+[[go-lint.baseline]]
+linter = "gocyclo"
+path = "internal/store/store.go"
+
+[[go-lint.baseline]]
+linter = "dupl"
+path = "internal/store/store.go"

@@ -72,6 +72,32 @@ Any other markdown file is a finding unless the `weeds.toml` markdown
 allowlist names it. An allowlist entry that matches no markdown file needing
 it, including one that names an always-allowed file, is stale and fails.
 
+### go-lint
+
+Runs a pinned golangci-lint image (`golangci/golangci-lint:v2.15.0`, pinned by
+tag and sha256 digest) once per Go module: every `go.mod` outside `vendor`,
+`testdata` and `node_modules` whose module holds Go files. Weeds writes its own
+preset and passes it with `--config`, so a golangci-lint configuration in your
+repository is never read. The preset enables:
+
+- correctness: `errcheck`, `govet`, `ineffassign`, `staticcheck`;
+- dead code: `unused`;
+- `godox` (TODO, BUG and FIXME comments);
+- complexity: `funlen` (60 lines, 40 statements), `gocognit` (15), `nestif`
+  (4) and `dupl` (80 tokens).
+
+Every issue is reported, none are capped or merged, and a `//nolint` directive
+does not hide a go-lint finding (the `suppressions` check reports the
+directive itself). The rule of a finding is the linter's name, and paths are
+relative to the workspace root. A module that does not build, a golangci-lint
+failure or output Weeds cannot read raises an error instead of passing. The Go
+module and build caches are kept between runs, and go.mod's `go` directive must
+not need a newer toolchain than the image carries.
+
+A complexity finding ends with `(baseline symbol "Name")`, where `Name` is the
+nearest preceding top-level declaration (`Recv.Method` for a method), so the
+baseline entry can be copied from the finding.
+
 ### Scanning
 
 The scanning checks (`suppressions`, `markdown`, `comments`) share one walk of
@@ -153,12 +179,19 @@ allowlist = ["notes/design.md"]
 
 ```toml
 [[go-lint.baseline]]
-linter = "<complexity linter>"
+linter = "gocognit"
 path = "internal/store/store.go"
 symbol = "Store.Load"
+reason = "split Load before the next release"
 ```
 
-The baseline may hold complexity findings only, and it may only shrink.
+The baseline may hold complexity findings only (`funlen`, `gocognit`, `nestif`
+and `dupl`) and it may only shrink. An entry for any other linter is a config
+error. An entry matches a finding by linter, path and enclosing symbol, never
+by line number, so it survives edits above the function. Leave `symbol` out to
+match every finding of that linter in the file. A matching entry removes its
+finding, and an entry that matches nothing is stale and fails the check.
+Exceptions can name any go-lint linter as a `rule`.
 
 ### Skills subset
 

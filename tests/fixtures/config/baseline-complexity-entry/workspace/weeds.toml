@@ -1,0 +1,9 @@
+[[go-lint.baseline]]
+linter = "gocognit"
+path = "internal/store/store.go"
+symbol = "Store.Load"
+reason = "split Load before the next release"
+
+[[go-lint.baseline]]
+linter = "funlen"
+path = "cmd/tool/main.go"

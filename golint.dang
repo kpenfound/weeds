@@ -1,0 +1,257 @@
+let goLintImage: String! = "golangci/golangci-lint:v2.15.0@sha256:fbfcfd12a6f8d7f1b97b3362ca80fc2a244d46863148c73cb88e7793af96c481"
+
+let goLintSource = "/src"
+
+let goLintPresetPath = "/weeds/golangci.yml"
+
+let correctnessLinters: [String!]! = ["errcheck", "govet", "ineffassign", "staticcheck"]
+
+let deadCodeLinters: [String!]! = ["unused"]
+
+let todoLinters: [String!]! = ["godox"]
+
+let complexityLinters: [String!]! = ["funlen", "gocognit", "nestif", "dupl"]
+
+let goLintLinters: [String!]! = correctnessLinters + deadCodeLinters + todoLinters + complexityLinters
+
+let goLintPresetHead: [String!]! = [
+  "version: \"2\""
+  "linters:"
+  "  default: none"
+  "  enable:"
+]
+
+let goLintPresetTail: [String!]! = [
+  "  settings:"
+  "    funlen:"
+  "      lines: 60"
+  "      statements: 40"
+  "    gocognit:"
+  "      min-complexity: 15"
+  "    nestif:"
+  "      min-complexity: 4"
+  "    dupl:"
+  "      threshold: 80"
+  "issues:"
+  "  max-issues-per-linter: 0"
+  "  max-same-issues: 0"
+  "  uniq-by-line: false"
+]
+
+let goLintPreset: String! = (goLintPresetHead + goLintLinters.map { name => "    - " + name } + goLintPresetTail).join("\n") + "\n"
+
+let goLintInertNolint = "grep -rlE --include='*.go' --exclude-dir=.git --exclude-dir=node_modules '//[[:space:]]*nolint' " + goLintSource + " | xargs -r sed -i -E 's#//[[:space:]]*nolint#//weeds-inert-nolint#g'"
+
+let lastPart(path: String!): String! {
+  let parts = path.split("/")
+  parts[parts.length - 1]!
+}
+
+let parentDirectory(path: String!): String! {
+  let parts = path.split("/")
+  if (parts.length == 1) {
+    "."
+  } else {
+    parts.dropLast.join("/")
+  }
+}
+
+let goLintCandidate(path: String!): Boolean! {
+  !path.split("/").any { part => part == "testdata" }
+}
+
+let moduleDepth(module: String!): Int! {
+  if (module == ".") {
+    0
+  } else {
+    module.length
+  }
+}
+
+let owningModule(modules: [String!]!, dir: String!): String! {
+  let best = ""
+  let found = false
+  modules.each { module =>
+    if (module == "." or dir == module or dir.hasPrefix(module + "/")) {
+      if (!found or moduleDepth(module) > moduleDepth(best)) {
+        best = module
+        found = true
+      }
+    }
+  }
+  best
+}
+
+let goModules(files: [String!]!): [String!]! {
+  let candidates = files.filter { path => goLintCandidate(path) }
+  let modules = sortStrings(candidates.filter { path => lastPart(path) == "go.mod" }.map { path => parentDirectory(path) })
+  let sourceDirectories = candidates.filter { path => path.hasSuffix(".go") }.map { path => parentDirectory(path) }.uniq
+  let used = sourceDirectories.map { dir => owningModule(modules, dir) }
+  modules.filter { module => used.contains(module) }
+}
+
+let goLintBase(source: Directory!): Container! {
+  container
+    .from(goLintImage)
+    .withMountedCache("/go/pkg/mod", cacheVolume("weeds-go-mod"))
+    .withEnvVariable("GOMODCACHE", "/go/pkg/mod")
+    .withMountedCache("/go/build-cache", cacheVolume("weeds-go-build"))
+    .withEnvVariable("GOCACHE", "/go/build-cache")
+    .withMountedCache("/go/lint-cache", cacheVolume("weeds-golangci-lint"))
+    .withEnvVariable("GOLANGCI_LINT_CACHE", "/go/lint-cache")
+    .withEnvVariable("GOFLAGS", "-mod=mod")
+    .withEnvVariable("GOTOOLCHAIN", "local")
+    .withDirectory(goLintSource, source.filter(exclude: [".git", "**/.git"]))
+    .withNewFile(goLintPresetPath, goLintPreset)
+    .withExec(["sh", "-c", goLintInertNolint])
+}
+
+let moduleLabel(module: String!): String! {
+  if (module == ".") {
+    ". (the workspace root)"
+  } else {
+    module
+  }
+}
+
+let goLintArguments: [String!]! = [
+  "golangci-lint", "run",
+  "--config", goLintPresetPath,
+  "--issues-exit-code", "0",
+  "--show-stats=false",
+  "--path-mode=abs",
+  "--output.json.path=stdout",
+]
+
+let runGoLint(base: Container!, module: String!): Container! {
+  let workdir = if (module == ".") { goLintSource } else { goLintSource + "/" + module }
+  base.withWorkdir(workdir).withExec(goLintArguments, expect: ReturnType.ANY)
+}
+
+let declaredSymbol(row: String!): String! {
+  let method = row.match(`^func\s*\(\s*(?:\w+\s+)?\*?\s*(?P<recv>\w+)(?:\[[^\]]*\])?\s*\)\s*(?P<name>\w+)`)
+  let plain = row.match(`^(?:func|var|const|type)\s+(?P<name>\w+)`)
+  if (method != null) {
+    method!.named["recv"]! + "." + method!.named["name"]!
+  } else if (plain != null) {
+    plain!.named["name"]!
+  } else {
+    "(none)"
+  }
+}
+
+let goSymbol(source: Directory!, path: String!, line: Int!): String! {
+  let rows = source.file(path).contents.split("\n")
+  let at = if (line > rows.length) { rows.length - 1 } else { line - 1 }
+  let symbol = "(none)"
+  loop {
+    if (at < 0) {
+      break
+    }
+    if (rows[at]!.containsMatch(`^(?:func|var|const|type)\b`)) {
+      symbol = declaredSymbol(rows[at]!)
+      break
+    }
+    at = at - 1
+  }
+  symbol
+}
+
+let baselineNote(symbol: String!): String! {
+  " (baseline symbol " + quoted(symbol) + ")"
+}
+
+let baselineSymbolOf(finding: Finding!): String! {
+  let m = finding.message.match(`\(baseline symbol "(?P<symbol>[^"]*)"\)$`)
+  if (m == null) {
+    ""
+  } else {
+    m!.named["symbol"]!
+  }
+}
+
+let goLintFinding(source: Directory!, module: String!, doc: TomlDoc!, at: String!): Finding! {
+  let label = moduleLabel(module)
+  let linter = doc.textOf(at + ".FromLinter")
+  let text = doc.textOf(at + ".Text").replace("\n", " ")
+  let file = doc.textOf(at + ".Pos.Filename")
+  let lineText = doc.textOf(at + ".Pos.Line")
+  if (linter == "" or file == "" or doc.kindOf(at + ".Pos.Line") != "other" or !lineText.containsMatch(`^[0-9]+$`)) {
+    raise "go-lint: golangci-lint output for module " + label + " has an issue without a linter, file or line: " + at
+  }
+  let reported = parseInt(lineText)
+  let line = if (reported < 1) { 1 } else { reported }
+  if (linter == "typecheck") {
+    raise "go-lint: golangci-lint could not build module " + label + " (" + file + ":" + toString(line) + "): " + text
+  }
+  if (!goLintLinters.contains(linter)) {
+    raise "go-lint: golangci-lint reported an issue from linter " + quoted(linter) + ", which Weeds does not register (module " + label + ", " + file + ":" + toString(line) + ")"
+  }
+  let prefix = goLintSource + "/"
+  if (!file.hasPrefix(prefix)) {
+    raise "go-lint: golangci-lint reported a file outside the workspace in module " + label + ": " + file
+  }
+  let path = file.trimPrefix(prefix)
+  let shown = if (module == ".") { text } else { text.replace("duplicate of `", "duplicate of `" + module + "/") }
+  let message = if (complexityLinters.contains(linter)) {
+    shown + baselineNote(goSymbol(source, path, line))
+  } else {
+    shown
+  }
+  Finding(path: path, line: line, rule: linter, message: message)
+}
+
+let goLintIssues(source: Directory!, module: String!, output: String!): [Finding!]! {
+  let label = moduleLabel(module)
+  if (!output.trimSpace.hasPrefix("{") or !output.trimSpace.hasSuffix("}")) {
+    raise "go-lint: golangci-lint output for module " + label + " is not readable JSON: " + output.trimSpace
+  }
+  let doc = readDoc(output)
+  if (doc.kindOf("") != "object" or !doc.has("Issues")) {
+    raise "go-lint: golangci-lint output for module " + label + " has no Issues list"
+  }
+  if (doc.kindOf("Issues") == "other" and doc.textOf("Issues") == "null") {
+    []
+  } else if (doc.kindOf("Issues") != "array") {
+    raise "go-lint: golangci-lint output for module " + label + " has an unreadable Issues list"
+  } else {
+    doc.keysOf("Issues").map { member => goLintFinding(source, module, doc, doc.childOf("Issues", member)) }
+  }
+}
+
+let lintModule(source: Directory!, base: Container!, module: String!): [Finding!]! {
+  let ran = runGoLint(base, module)
+  let code = ran.exitCode
+  if (code != 0) {
+    raise "go-lint: golangci-lint exited with status " + toString(code) + " in module " + moduleLabel(module) + ":\n" + ran.stderr.trimSpace + "\n" + ran.stdout.trimSpace
+  }
+  goLintIssues(source, module, ran.stdout)
+}
+
+let goLintHits(source: Directory!, files: [String!]!): [Finding!]! {
+  let modules = goModules(files)
+  if (modules.isEmpty) {
+    []
+  } else {
+    let base = goLintBase(source)
+    modules.reduce([] :: [Finding!]!) { all, module => all + lintModule(source, base, module) }
+  }
+}
+
+let baselineLabel(entry: BaselineEntry!): String! {
+  entry.linter + " in " + entry.path + (if (entry.symbol == "") { "" } else { " symbol " + quoted(entry.symbol) })
+}
+
+let staleBaseline(hits: [Finding!]!, settings: Settings!): [Finding!]! {
+  settings.baseline
+    .filter { entry => !hits.any { f => entry.matches(f) } }
+    .map { entry =>
+      staleFinding("stale-baseline", entry.line, "baseline entry for " + baselineLabel(entry) + " matches no finding; remove it")
+    }
+}
+
+let goLintFindings(source: Directory!, files: [String!]!, settings: Settings!): [Finding!]! {
+  let hits = goLintHits(source, files)
+  let remaining = hits.filter { f => !settings.baseline.any { entry => entry.matches(f) } }
+  sortFindings(applyExceptions("go-lint", remaining, settings) + staleBaseline(hits, settings))
+}

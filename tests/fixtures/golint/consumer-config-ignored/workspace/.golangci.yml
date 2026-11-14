@@ -1,0 +1,12 @@
+version: "2"
+linters:
+  default: none
+issues:
+  max-issues-per-linter: 1
+  max-same-issues: 1
+  uniq-by-line: true
+run:
+  tests: false
+  skip-dirs:
+    - worker
+    - api

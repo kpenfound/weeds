@@ -1,0 +1,5 @@
+services/store/store.go:7: gocognit: cognitive complexity 21 of func `(*Store).Rebuild` is high (> 15) (baseline symbol "Store.Rebuild")
+weeds.toml:6: stale-baseline: baseline entry for gocognit in worker/sum.go symbol "Renamed" matches no finding; remove it
+weeds.toml:11: stale-baseline: baseline entry for funlen in worker/nest.go symbol "Classify" matches no finding; remove it
+weeds.toml:16: stale-baseline: baseline entry for nestif in worker/gone.go symbol "Classify" matches no finding; remove it
+worker/nest.go:4: nestif: `if a > 0` has complex nested blocks (complexity: 6) (baseline symbol "Classify")

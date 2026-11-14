@@ -226,6 +226,26 @@ type WeedsTests {
   }
 
   """
+  The go-lint check over fixture workspaces, through the real golangci-lint
+  image: every finding category across several Go modules, a consumer
+  golangci-lint config that must change nothing, the baseline and exceptions.
+  """
+  pub golint: Void @check {
+    runSuite("golint")
+  }
+
+  """
+  The golangci-lint image is pinned by an exact tag and a sha256 digest, never
+  latest.
+  """
+  pub golintPin: Void @check {
+    let ref = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).goLintImageRef
+    expect(ref.containsMatch(`^[a-z0-9./-]+:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$`), "the image must carry an exact vX.Y.Z tag and a sha256 digest, got: " + ref)
+    expect(!ref.contains("latest"), "the image must not follow latest, got: " + ref)
+    null
+  }
+
+  """
   Every rule file in the comment packs has a rule test and a snapshot, every
   scanned rule id is registered, and ast-grep's rule tests pass for the Go,
   TypeScript and derived TSX packs.
@@ -259,6 +279,22 @@ type WeedsTests {
   }
 
   """
+  The generated preset enables the correctness, dead-code, godox and
+  complexity linters and nothing else, and never lets golangci-lint cap or
+  merge issues.
+  """
+  pub golintPreset: Void @check {
+    let preset = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).goLintPresetText
+    expect(preset.contains("default: none"), "the preset must start from no linters, got:\n" + preset)
+    let enabled = ["errcheck", "govet", "ineffassign", "staticcheck", "unused", "godox", "funlen", "gocognit", "nestif", "dupl"]
+    enabled.each { name =>
+      expect(preset.contains("    - " + name + "\n"), "the preset must enable " + name + ", got:\n" + preset)
+    }
+    expect(preset.contains("uniq-by-line: false") and preset.contains("max-issues-per-linter: 0") and preset.contains("max-same-issues: 0"), "the preset must report every issue, got:\n" + preset)
+    null
+  }
+
+  """
   The rule-test gap detector fails on a rule without a test, without a
   snapshot, or whose file name differs from its id.
   """
@@ -277,6 +313,51 @@ type WeedsTests {
     let wrongId = complete.withNewFile("rules/d.yml", "id: other\n").withNewFile("tests/d-test.yml", "id: d\n").withNewFile("tests/__snapshots__/d-snapshot.yml", "id: d\n")
     let wrongIdGaps = ruleFileGaps("pack", wrongId).join("\n")
     expect(wrongIdGaps.contains("rules/d.yml must declare id: d"), "a file name that differs from its id must be reported, got: " + wrongIdGaps)
+    null
+  }
+
+  """
+  go-lint runs once per go.mod outside vendor, testdata and node_modules,
+  skipping a module that holds no Go files.
+  """
+  pub golintModules: Void @check {
+    let tree = directory
+      .withNewFile("go.mod", "module root\n")
+      .withNewFile("main.go", "package main\n")
+      .withNewFile("a/go.mod", "module a\n")
+      .withNewFile("a/x.go", "package a\n")
+      .withNewFile("a/b/go.mod", "module b\n")
+      .withNewFile("a/b/y.go", "package b\n")
+      .withNewFile("tools/go.mod", "module tools\n")
+      .withNewFile("tools/notes.txt", "no Go here\n")
+      .withNewFile("only-testdata/go.mod", "module t\n")
+      .withNewFile("only-testdata/testdata/z.go", "package z\n")
+      .withNewFile("testdata/m/go.mod", "module m\n")
+      .withNewFile("testdata/m/m.go", "package m\n")
+      .withNewFile("vendor/v/go.mod", "module v\n")
+      .withNewFile("vendor/v/v.go", "package v\n")
+      .withNewFile("node_modules/n/go.mod", "module n\n")
+      .withNewFile("node_modules/n/n.go", "package n\n")
+      .withNewFile("outer/go.mod", "module outer\n")
+      .withNewFile("outer/inner/go.mod", "module inner\n")
+      .withNewFile("outer/inner/i.go", "package inner\n")
+    let modules = weeds(ws: tree.asWorkspace).goLintModules.join(",")
+    expect(modules == ".,a,a/b,outer/inner", "go-lint must lint each module that holds Go files, once; got: " + modules)
+    null
+  }
+
+  """
+  A module that does not build cannot be linted: go-lint raises instead of
+  passing. The broken module is built here so no committed fixture breaks the
+  repository's own go-lint run.
+  """
+  pub golintBuildFailure: Void @check {
+    let tree = directory
+      .withNewFile("go.mod", "module example.com/broken\n\ngo 1.22\n")
+      .withNewFile("broken.go", "package broken\n\nfunc Value() int {\n\treturn missing\n}\n")
+    let outcome = { weeds(ws: tree.asWorkspace).goLintReport } rescue { err: Error => err.message }
+    expect(outcome.contains("go-lint: golangci-lint could not build module . (the workspace root)"), "a build failure must raise naming the module, got: " + outcome)
+    expect(outcome.contains("undefined: missing"), "the build error must be shown, got: " + outcome)
     null
   }
 
@@ -347,6 +428,7 @@ type WeedsTests {
       "suppressions" => subject.suppressionsReport
       "markdown" => subject.markdownReport
       "comments" => subject.commentsReport
+      "golint" => subject.goLintReport
       else => raise "no report is registered for suite " + suite
     }
   }

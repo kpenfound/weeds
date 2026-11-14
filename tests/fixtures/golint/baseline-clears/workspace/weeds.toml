@@ -1,0 +1,15 @@
+[[go-lint.baseline]]
+linter = "gocognit"
+path = "worker/sum.go"
+symbol = "Sum"
+reason = "split Sum before the next release"
+
+[[go-lint.baseline]]
+linter = "nestif"
+path = "worker/nest.go"
+symbol = "Classify"
+
+[[go-lint.baseline]]
+linter = "gocognit"
+path = "services/store/store.go"
+symbol = "Store.Rebuild"

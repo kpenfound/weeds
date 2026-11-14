@@ -1,0 +1,2 @@
+silenced.go:6: errcheck: Error return value of `os.Remove` is not checked
+silenced.go:10: errcheck: Error return value of `os.Remove` is not checked

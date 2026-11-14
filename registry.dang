@@ -4,7 +4,7 @@ let markdownRules: [String!]! = [markdownRule]
 
 let commentsRules: [String!]! = ["go-comment-todo", "go-comment-main", "go-comment-internal", "go-comment-code", "go-comment-not-doc", "go-comment-detached", "ts-comment-todo", "ts-comment-internal", "ts-comment-code", "ts-comment-not-doc", "ts-comment-detached"]
 
-let goLintRules: [String!]! = []
+let goLintRules: [String!]! = goLintLinters
 
 let installedSkillsRules: [String!]! = []
 
@@ -16,7 +16,7 @@ let checkRules: Map[[String!]!]! = [
   "installed-skills": installedSkillsRules
 ]
 
-let baselineLinters: [String!]! = []
+let baselineLinters: [String!]! = complexityLinters
 
 let defaultSkills: [String!]! = [
   "no-comments"

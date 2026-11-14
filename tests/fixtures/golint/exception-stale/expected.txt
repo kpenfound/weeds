@@ -1,0 +1,12 @@
+api/api.go:6: errcheck: Error return value of `os.Remove` is not checked
+api/api.go:11: govet: unreachable: unreachable code
+api/api.go:14: unused: func unusedHelper is unused
+api/api.go:19: godox: Line contains TODO/BUG/FIXME: "TODO: compute this for real"
+services/store/store.go:7: gocognit: cognitive complexity 21 of func `(*Store).Rebuild` is high (> 15) (baseline symbol "Store.Rebuild")
+services/store/store.go:25: unused: func leftover is unused
+weeds.toml:1: stale-exception: exception for rule "govet" with paths worker/** matches no finding; remove it
+worker/dup.go:3: dupl: 3-28 lines are duplicate of `worker/dup.go:30-55` (baseline symbol "First")
+worker/dup.go:30: dupl: 30-55 lines are duplicate of `worker/dup.go:3-28` (baseline symbol "Second")
+worker/long.go:3: funlen: Function 'Long' has too many statements (63 > 40) (baseline symbol "Long")
+worker/nest.go:4: nestif: `if a > 0` has complex nested blocks (complexity: 6) (baseline symbol "Classify")
+worker/sum.go:3: gocognit: cognitive complexity 21 of func `Sum` is high (> 15) (baseline symbol "Sum")
