@@ -1,0 +1,4 @@
++ .cursor/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .cursor/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n
++ .github/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .github/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n

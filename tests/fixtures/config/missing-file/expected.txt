@@ -1,0 +1,4 @@
+exceptions: 0
+markdown allowlist: none
+go-lint baseline: 0
+skills: no-comments, lint-discipline, simple-code, typescript-best-practices, unslop, no-deltas, behavioral-testing

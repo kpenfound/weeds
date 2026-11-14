@@ -1,0 +1,55 @@
+id: go-comment-todo
+snapshots:
+  ? |
+    package p
+
+    /*
+    Run starts the work.
+    FIXME: slow
+    */
+    func Run() {}
+  : labels:
+    - source: |-
+        /*
+        Run starts the work.
+        FIXME: slow
+        */
+      style: primary
+      start: 11
+      end: 49
+  ? |
+    package p
+
+    // FIXME this is wrong
+    func Run() {}
+  : labels:
+    - source: // FIXME this is wrong
+      style: primary
+      start: 11
+      end: 33
+  ? |
+    package p
+
+    // TODO: handle the error
+    func run() {}
+  : labels:
+    - source: '// TODO: handle the error'
+      style: primary
+      start: 11
+      end: 36
+  ? |
+    package p
+
+    //go:generate stringer -type=T TODO
+    type T int
+  : labels:
+    - source: //go:generate stringer -type=T TODO
+      style: primary
+      start: 11
+      end: 46
+  ? "package p\n\nfunc run() {\n\t// TODO: later\n}\n"
+  : labels:
+    - source: '// TODO: later'
+      style: primary
+      start: 25
+      end: 39

@@ -1,0 +1,9 @@
+name = "weeds-tests"
+engineVersion = "v1.0.0-beta.27"
+
+[runtime]
+source = "dang"
+
+[[dependencies]]
+name = "weeds"
+source = ".."

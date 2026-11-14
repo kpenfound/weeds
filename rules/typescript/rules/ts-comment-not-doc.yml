@@ -1,0 +1,19 @@
+id: ts-comment-not-doc
+language: TypeScript
+severity: hint
+message: comment is not a doc comment on an exported identifier
+rule:
+  all:
+    - kind: comment
+    - not:
+        matches: ts-directive
+    - any:
+        - matches: ts-in-function
+        - not:
+            matches: ts-jsdoc
+        - not:
+            precedes:
+              stopBy:
+                not:
+                  kind: comment
+              matches: ts-doc-target

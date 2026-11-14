@@ -1,0 +1,323 @@
+"""
+Weeds: lint-enforced "no excuses" code. The module holds the complete
+consumer workspace; the scanning checks walk it through walkFiles, which skips
+what the policy leaves out, while the installer reads the workspace in full.
+"""
+type Weeds {
+  """
+  The complete consumer workspace. Scan exclusions never apply to it.
+  """
+  pub source: Directory!
+
+  let skillInput: Directory
+
+  """
+  ws is the consumer workspace. skillSource replaces the pinned kpenfound/skills
+  commit as the place skills are installed from; tests pass fixture trees.
+  """
+  new(ws: Workspace!, skillSource: Directory = null) {
+    self.source = ws.directory("/")
+    self.skillInput = skillSource
+    self
+  }
+
+  let skillTree: Directory! {
+    skillInput ?? fetchSkills()
+  }
+
+  let settings: Settings! {
+    if (isRealFile(source, configFile)) {
+      parseSettings(source.file(configFile).contents)
+    } else {
+      Settings
+    }
+  }
+
+  """
+  Files the scanning checks read: every file except those under .git, vendor,
+  node_modules and Weeds-owned skill folders. Hidden and gitignored files are
+  included. Sorted.
+  """
+  pub scanFiles: [String!]! {
+    walkFiles(source)
+  }
+
+  """
+  Skill folders that carry a valid Weeds ownership marker, sorted.
+  """
+  pub ownedFolders: [String!]! {
+    findOwnedFolders(source)
+  }
+
+  """
+  The exact content of the Weeds ownership marker file.
+  """
+  pub ownerMarker: String! {
+    markerContent
+  }
+
+  """
+  The loaded weeds.toml (defaults when absent), one fact per line. Fails with a
+  message starting "weeds.toml is invalid:" when the file is invalid.
+  """
+  pub settingsReport: String! {
+    describeSettings(settings)
+  }
+
+  """
+  Whether a weeds.toml path glob matches a path.
+  """
+  pub globMatches(glob: String!, path: String!): Boolean! {
+    pathMatches(glob, path)
+  }
+
+  """
+  Parse finding lines, sort them and render them: the shared order and format.
+  """
+  pub sortedFindings(findings: String!): String! {
+    renderFindings(parseFindings(findings))
+  }
+
+  """
+  Run finding lines through the shared exception evaluator as if the named
+  check had reported them. Fails with the remaining findings, stale
+  exceptions included, exactly like a check; otherwise returns "no findings".
+  """
+  pub evaluateCheck(check: String!, findings: String!): String! {
+    if (!knownChecks.contains(check)) {
+      raise "unknown check " + quoted(check) + " (known checks: " + listOf(knownChecks) + ")"
+    }
+    verdict(check, parseFindings(findings))
+    "no findings"
+  }
+
+  """
+  The suppressions check's findings after the shared exceptions: one line per
+  finding, or "no findings".
+  """
+  pub suppressionsReport: String! {
+    reportOf(suppressionsOutcome)
+  }
+
+  """
+  No inline suppression directive (the eight forms listed in suppressions.dang)
+  in any scanned file. Only a named weeds.toml exception clears a finding.
+  """
+  pub suppressions: Void @check {
+    fail(suppressionsOutcome)
+  }
+
+  """
+  The markdown check's findings after the allowlist and exceptions: one line
+  per finding, or "no findings".
+  """
+  pub markdownReport: String! {
+    reportOf(markdownOutcome)
+  }
+
+  """
+  No internal markdown beyond the always-allowed set and the weeds.toml
+  markdown allowlist; a stale allowlist entry fails.
+  """
+  pub markdown: Void @check {
+    fail(markdownOutcome)
+  }
+
+  """
+  The pinned golangci-lint image reference, by tag and sha256 digest.
+  """
+  pub goLintImageRef: String! {
+    goLintImage
+  }
+
+  """
+  The golangci-lint configuration Weeds generates and passes with --config.
+  """
+  pub goLintPresetText: String! {
+    goLintPreset
+  }
+
+  """
+  The Go module directories go-lint runs in, sorted: every go.mod outside
+  vendor, testdata and node_modules whose module holds Go files. "." is the
+  workspace root.
+  """
+  pub goLintModules: [String!]! {
+    goModules(scanFiles)
+  }
+
+  """
+  The go-lint check's findings after the baseline and exceptions: one line
+  per finding, or "no findings".
+  """
+  pub goLintReport: String! {
+    reportOf(goLintOutcome)
+  }
+
+  """
+  golangci-lint, once per Go module, with the Weeds preset: correctness, dead
+  code, godox and complexity findings. Only complexity findings can be
+  baselined in weeds.toml, and a baseline entry that matches nothing fails.
+  """
+  pub goLint: Void @check {
+    fail(goLintOutcome)
+  }
+
+  let suppressionsOutcome: [Finding!]! {
+    applyExceptions("suppressions", suppressionHits(source, scanFiles), settings)
+  }
+
+  let goLintOutcome: [Finding!]! {
+    goLintFindings(source, scanFiles, settings)
+  }
+
+  let markdownOutcome: [Finding!]! {
+    markdownFindings(scanFiles, settings)
+  }
+
+  let reportOf(found: [Finding!]!): String! {
+    if (found.isEmpty) {
+      "no findings"
+    } else {
+      renderFindings(found)
+    }
+  }
+
+  let fail(found: [Finding!]!): Void {
+    if (!found.isEmpty) {
+      raise renderFindings(found)
+    }
+    null
+  }
+
+  """
+  The comments check's findings after weeds.toml exceptions, rendered one per
+  line (empty when there are none). The check itself fails with this text.
+  """
+  pub commentsReport: String! {
+    renderFindings(applyExceptions("comments", commentsFor(source), settings))
+  }
+
+  """
+  Comment policy for Go and TS/JS: only adjacent doc comments on exported
+  identifiers, tool directives, licence headers and generated files.
+  """
+  pub comments: Void @check {
+    verdict("comments", commentsFor(source))
+  }
+
+  """
+  The pinned ast-grep CLI container the comments check and its rule tests run.
+  """
+  pub astGrep: Container! {
+    astGrepTool
+  }
+
+  """
+  Weeds' Go comment rule pack, with its rule tests.
+  """
+  pub goRules: Directory! {
+    rulePackSource("go")
+  }
+
+  """
+  Weeds' TypeScript comment rule pack, with its rule tests.
+  """
+  pub typescriptRules: Directory! {
+    rulePackSource("typescript")
+  }
+
+  """
+  The TSX pack as the check derives it from the TypeScript pack at run time.
+  """
+  pub tsxRules: Directory! {
+    tsxRulePack(rulePackSource("typescript"))
+  }
+
+  """
+  Classify the ast-grep matches (a JSON array) for one file's text exactly as
+  the comments check does, without running ast-grep. Fails on a rule id that
+  is not registered.
+  """
+  pub classifyComments(path: String!, text: String!, matches: String!): String! {
+    let found = JSON.decode(matches) :: [SgMatch!]!
+    found.each { m => checkCommentRule(m.ruleId) }
+    renderFindings(commentFindings(path, text, found.filter { m => !commentIgnoredRules.contains(m.ruleId) }))
+  }
+
+  """
+  Every rule id a comment scan may report: registered rules and the doc
+  candidate markers the check consumes.
+  """
+  pub commentScanRules: [String!]! {
+    commentsRules + commentMarkerRules
+  }
+
+  """
+  The comment rule ids registered for weeds.toml exceptions.
+  """
+  pub registeredCommentRules: [String!]! {
+    commentsRules
+  }
+
+  """
+  Install the selected skills, from the pinned kpenfound/skills commit, into
+  every real skills directory among .agents/skills, .claude/skills,
+  .cursor/skills, .gemini/skills, .github/skills and .opencode/skills at the
+  repo root. With none, AGENTS.md creates .agents/skills and CLAUDE.md creates
+  .claude/skills; with neither, it fails. A symlink or file is never replaced
+  by a target. Each installed folder gets the Weeds ownership marker. A folder
+  to be written that exists without the marker aborts the run with no change.
+  Owned folders are replaced whole and owned folders of unselected skills are
+  removed. weeds.toml [skills] subset picks the skills; the default is all seven.
+  """
+  pub generate: Changeset! @generate {
+    let targets = skillTargets(source)
+    if (targets.isEmpty) {
+      raise "dagger generate has nowhere to install skills: create a skills directory such as .agents/skills or .claude/skills, or add AGENTS.md or CLAUDE.md"
+    }
+    checkSkillSource(skillTree, settings.skills)
+    installChanges(source, skillTree, targets, settings.skills)
+  }
+
+  let installedSkillsOutcome: [Finding!]! {
+    let targets = skillTargets(source)
+    let found: [Finding!]! = []
+    if (!targets.isEmpty) {
+      checkSkillSource(skillTree, settings.skills)
+      let conflicts = installConflicts(source, targets, settings.skills)
+      if (conflicts.isEmpty) {
+        found = changeFindings(installChanges(source, skillTree, targets, settings.skills))
+      } else {
+        found = conflictFindings(conflicts)
+      }
+    }
+    applyExceptions("installed-skills", found, settings)
+  }
+
+  """
+  The installed-skills check's findings after weeds.toml exceptions: one line
+  per path the generator would add, modify or remove, or "no findings".
+  """
+  pub installedSkillsReport: String! {
+    reportOf(installedSkillsOutcome)
+  }
+
+  """
+  The installed skill folders equal what dagger generate would write: one
+  finding per path it would add, modify or remove, and a finding naming each
+  folder that blocks it. With no skills directory and no AGENTS.md or
+  CLAUDE.md there is nothing to install and the check passes.
+  """
+  pub installedSkills: Void @check {
+    fail(installedSkillsOutcome)
+  }
+
+  let verdict(check: String!, found: [Finding!]!): Void {
+    let remaining = applyExceptions(check, found, settings)
+    if (!remaining.isEmpty) {
+      raise renderFindings(remaining)
+    }
+    null
+  }
+}

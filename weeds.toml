@@ -1,0 +1,19 @@
+# Weeds' own exceptions: named entries only, each one must still match something.
+
+[[exceptions]]
+check = "comments"
+paths = ["tests/fixtures/**"]
+reason = "fixture workspaces hold the comment forms the check must report"
+
+[[exceptions]]
+check = "suppressions"
+paths = ["suppressions.dang", "README.md", "tests/fixtures/**", "rules/typescript/tests/**", "comments.dang", "astgrep.dang", "tests/main.dang"]
+reason = "the directive list, the docs, the rule tests, the comments check and the fixtures quote or hold real directives"
+
+[[exceptions]]
+check = "go-lint"
+paths = ["tests/fixtures/**"]
+reason = "the go-lint fixtures hold Go modules with deliberate violations"
+
+[skills]
+subset = ["behavioral-testing", "no-deltas"]

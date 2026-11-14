@@ -1,0 +1,17 @@
+id: go-comment-main
+language: Go
+severity: hint
+message: comment in package main
+rule:
+  all:
+    - kind: comment
+    - not:
+        matches: go-directive
+    - inside:
+        kind: source_file
+        stopBy: end
+        has:
+          kind: package_clause
+          has:
+            kind: package_identifier
+            regex: '^main$'

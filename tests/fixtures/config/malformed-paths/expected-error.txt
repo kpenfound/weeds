@@ -1,0 +1,2 @@
+weeds.toml is invalid:
+exceptions[1].paths must be an array of strings

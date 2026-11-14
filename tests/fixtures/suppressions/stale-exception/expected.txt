@@ -1,0 +1,1 @@
+weeds.toml:1: stale-exception: exception for check "suppressions" with paths gone/** matches no finding; remove it

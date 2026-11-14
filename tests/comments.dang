@@ -1,0 +1,35 @@
+let sgMatch(rule: String!, line: Int!, column: Int!, endLine: Int!): String! {
+  "{\"file\":\"x\",\"ruleId\":\"" + rule + "\",\"range\":{\"start\":{\"line\":" + toString(line) + ",\"column\":" + toString(column) + "},\"end\":{\"line\":" + toString(endLine) + ",\"column\":0}}}"
+}
+
+let sgMatches(items: [String!]!): String! {
+  "[" + items.join(",") + "]"
+}
+
+let ruleFileGaps(label: String!, pack: Directory!): [String!]! {
+  let problems: [String!]! = []
+  pack.entries(path: "rules").each { entry =>
+    let file = entry.trimSuffix("/")
+    if (file.hasSuffix(".yml")) {
+      let id = file.trimSuffix(".yml")
+      if (!pack.file("rules/" + file).contents.contains("id: " + id + "\n")) {
+        problems += [label + ": rules/" + file + " must declare id: " + id]
+      }
+      if (!pack.exists("tests/" + id + "-test.yml")) {
+        problems += [label + ": rule " + id + " has no rule test tests/" + id + "-test.yml"]
+      }
+      if (!pack.exists("tests/__snapshots__/" + id + "-snapshot.yml")) {
+        problems += [label + ": rule " + id + " has no snapshot tests/__snapshots__/" + id + "-snapshot.yml"]
+      }
+    }
+  }
+  problems
+}
+
+let ruleIdsOf(pack: Directory!): [String!]! {
+  pack.entries(path: "rules").map { entry => entry.trimSuffix("/") }.filter { file => file.hasSuffix(".yml") }.map { file => file.trimSuffix(".yml") }
+}
+
+let runRuleTests(tool: Container!, pack: Directory!): String! {
+  tool.withDirectory("/pack", pack).withWorkdir("/pack").withExec(["ast-grep", "test"]).stdout
+}

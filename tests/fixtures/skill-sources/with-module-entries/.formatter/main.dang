@@ -1,0 +1,3 @@
+type Formatter {
+  pub name: String!
+}

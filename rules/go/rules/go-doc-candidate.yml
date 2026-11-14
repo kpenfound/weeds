@@ -1,0 +1,16 @@
+id: go-doc-candidate
+language: Go
+severity: hint
+message: doc comment on an exported identifier
+rule:
+  all:
+    - kind: comment
+    - not:
+        matches: go-directive
+    - not:
+        matches: go-in-function
+    - precedes:
+        stopBy:
+          not:
+            kind: comment
+        matches: go-doc-target

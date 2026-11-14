@@ -1,0 +1,42 @@
+let pinTokens: [String!]! = [
+  ".latest"
+  ".branch("
+  ".tag("
+  ".ref("
+  ".head"
+  "ls-remote"
+  "refs/"
+  "httpAuth"
+  "sshAuth"
+  "Secret"
+  "secret"
+  "token"
+  "password"
+  "credential"
+  "authHeader"
+]
+
+let pinProblems(text: String!): [String!]! {
+  let problems: [String!]! = []
+  let pin = text.match(`(?m)^let skillsCommit = "(?P<sha>[^"]*)"$`)
+  if (pin == null) {
+    problems += ["skills.dang has no `let skillsCommit = \"<sha>\"` line"]
+  } else {
+    let sha = pin!.named["sha"]!
+    if (!sha.containsMatch(`^[0-9a-f]{40}$`)) {
+      problems += ["skillsCommit must be a full 40-character lowercase hex SHA, got " + quoted(sha)]
+    }
+  }
+  let repository = text.match(`(?m)^let skillsRepository = "(?P<url>[^"]*)"$`)
+  if (repository == null) {
+    problems += ["skills.dang has no `let skillsRepository = \"<url>\"` line"]
+  } else if (repository!.named["url"]! != "https://github.com/kpenfound/skills") {
+    problems += ["skillsRepository must be https://github.com/kpenfound/skills with no user info, got " + quoted(repository!.named["url"]!)]
+  }
+  pinTokens.each { word =>
+    if (text.contains(word)) {
+      problems += ["skills.dang holds the lookup or credential token " + quoted(word)]
+    }
+  }
+  problems
+}

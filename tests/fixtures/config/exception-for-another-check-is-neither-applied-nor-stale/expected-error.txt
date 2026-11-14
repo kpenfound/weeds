@@ -1,0 +1,2 @@
+src/main.go:7: nolint: //nolint directive
+!stale-exception

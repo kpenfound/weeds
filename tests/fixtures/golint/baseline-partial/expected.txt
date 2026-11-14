@@ -1,0 +1,2 @@
+services/store/store.go:7: gocognit: cognitive complexity 21 of func `(*Store).Rebuild` is high (> 15) (baseline symbol "Store.Rebuild")
+worker/nest.go:4: nestif: `if a > 0` has complex nested blocks (complexity: 6) (baseline symbol "Classify")

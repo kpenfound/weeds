@@ -1,0 +1,3 @@
+check: suppressions
+tests/fixtures/a/x.go:3: nolint: //nolint directive
+src/main.go:7: nolint: //nolint directive

@@ -1,0 +1,5 @@
+id: ts-jsdoc
+language: TypeScript
+rule:
+  kind: comment
+  regex: '^/\*\*[^/]'

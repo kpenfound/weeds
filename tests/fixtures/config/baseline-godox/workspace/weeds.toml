@@ -1,0 +1,4 @@
+[[go-lint.baseline]]
+linter = "godox"
+path = "internal/store/store.go"
+symbol = "Store.Load"

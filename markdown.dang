@@ -1,0 +1,68 @@
+let markdownRule = "internal-markdown"
+
+let markdownExtensions: [String!]! = [".md", ".markdown", ".mdx"]
+
+let allowedMarkdownStems: [String!]! = [
+  "readme"
+  "agents"
+  "claude"
+  "contributing"
+  "license"
+  "licence"
+  "changelog"
+  "changes"
+  "history"
+  "release-notes"
+  "release_notes"
+  "releasenotes"
+]
+
+let allowedMarkdownDirectories: [String!]! = [
+  "docs"
+  "testdata"
+  "fixtures"
+  "fixture"
+  "__fixtures__"
+  "test-fixtures"
+  "test_fixtures"
+  "testfixtures"
+]
+
+let markdownName(path: String!): String! {
+  let parts = path.split("/")
+  parts[parts.length - 1]!
+}
+
+let isMarkdownPath(path: String!): Boolean! {
+  let name = markdownName(path).toLower
+  markdownExtensions.any { ext => name.hasSuffix(ext) }
+}
+
+let markdownStem(path: String!): String! {
+  let name = markdownName(path).toLower
+  let ext = markdownExtensions.filter { e => name.hasSuffix(e) }
+  name.trimSuffix(ext[0]!)
+}
+
+let isAllowedMarkdown(path: String!): Boolean! {
+  allowedMarkdownStems.contains(markdownStem(path)) or path.split("/").dropLast.any { part => allowedMarkdownDirectories.contains(part.toLower) }
+}
+
+let markdownMessage = "internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist"
+
+let markdownCandidates(files: [String!]!): [Finding!]! {
+  files.filter { path => isMarkdownPath(path) and !isAllowedMarkdown(path) }.map { path =>
+    Finding(path: path, line: 1, rule: markdownRule, message: markdownMessage)
+  }
+}
+
+let markdownFindings(files: [String!]!, settings: Settings!): [Finding!]! {
+  let candidates = markdownCandidates(files)
+  let unlisted = candidates.filter { f => !settings.allowlist.any { glob => pathMatches(glob, f.path) } }
+  let stale = settings.allowlist
+    .filter { glob => !candidates.any { f => pathMatches(glob, f.path) } }
+    .map { glob =>
+      staleFinding("stale-allowlist", settings.allowlistLine, "markdown allowlist entry " + quoted(glob) + " matches no markdown file that needs it; remove it")
+    }
+  sortFindings(applyExceptions("markdown", unlisted, settings) + stale)
+}

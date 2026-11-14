@@ -1,0 +1,12 @@
+id: ts-comment-internal
+language: TypeScript
+severity: hint
+message: comment under internal/
+files:
+  - "**/internal/**"
+  - "internal/**"
+rule:
+  all:
+    - kind: comment
+    - not:
+        matches: ts-directive

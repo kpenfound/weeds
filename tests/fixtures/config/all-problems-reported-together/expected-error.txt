@@ -1,0 +1,5 @@
+weeds.toml is invalid:
+unknown key "strange"
+exceptions[1]: unknown check "spellcheck"
+exceptions[1].paths must be an array of strings
+skills.subset must not be empty

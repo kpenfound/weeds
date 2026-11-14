@@ -1,0 +1,12 @@
+id: ts-in-function
+language: TypeScript
+rule:
+  inside:
+    any:
+      - kind: function_declaration
+      - kind: generator_function_declaration
+      - kind: function_expression
+      - kind: generator_function
+      - kind: arrow_function
+      - kind: method_definition
+    stopBy: end

@@ -1,0 +1,2 @@
+weeds.toml:2: stale-allowlist: markdown allowlist entry "README.md" matches no markdown file that needs it; remove it
+weeds.toml:2: stale-allowlist: markdown allowlist entry "gone/plan.md" matches no markdown file that needs it; remove it

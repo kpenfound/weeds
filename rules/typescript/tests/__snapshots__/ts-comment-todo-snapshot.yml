@@ -1,0 +1,50 @@
+id: ts-comment-todo
+snapshots:
+  ? |
+    /*
+     * Starts the work.
+     * TODO: faster
+     */
+    export function run() {}
+  : labels:
+    - source: |-
+        /*
+         * Starts the work.
+         * TODO: faster
+         */
+      style: primary
+      start: 0
+      end: 42
+  ? |
+    /** FIXME: slow */
+    export function run() {}
+  : labels:
+    - source: '/** FIXME: slow */'
+      style: primary
+      start: 0
+      end: 18
+  ? |
+    // TODO: handle the error
+    function run() {}
+  : labels:
+    - source: '// TODO: handle the error'
+      style: primary
+      start: 0
+      end: 25
+  ? |
+    /// <reference path="x.d.ts" /> TODO
+    export const a = 1;
+  : labels:
+    - source: /// <reference path="x.d.ts" /> TODO
+      style: primary
+      start: 0
+      end: 36
+  ? |
+    function run() {
+      // FIXME later
+    }
+  : labels:
+    - source: // FIXME later
+      style: primary
+      start: 19
+      end: 33

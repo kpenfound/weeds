@@ -1,0 +1,4 @@
+[[go-lint.baseline]]
+linter = "gocognit"
+path = "worker/sum.go"
+symbol = "Sum"

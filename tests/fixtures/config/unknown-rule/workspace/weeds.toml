@@ -1,0 +1,3 @@
+[[exceptions]]
+rule = "no-such-rule"
+paths = ["src/**"]

@@ -1,0 +1,5 @@
+src/a.js:4: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/b.jsx:2: ts-comment-detached: trailing comment
+src/c.mjs:1: ts-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note
+src/d.cjs:4: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/e.tsx:8: ts-comment-detached: trailing comment

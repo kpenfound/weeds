@@ -1,0 +1,96 @@
+id: go-comment-main
+snapshots:
+  ? |
+    package main
+
+    // Run is exported.
+    func Run() {}
+  : labels:
+    - source: // Run is exported.
+      style: primary
+      start: 14
+      end: 33
+    - source: main
+      style: secondary
+      start: 8
+      end: 12
+    - source: package main
+      style: secondary
+      start: 0
+      end: 12
+    - source: |
+        package main
+
+        // Run is exported.
+        func Run() {}
+      style: secondary
+      start: 0
+      end: 48
+  ? |
+    package main
+
+    // main starts the program.
+    func main() {}
+  : labels:
+    - source: // main starts the program.
+      style: primary
+      start: 14
+      end: 41
+    - source: main
+      style: secondary
+      start: 8
+      end: 12
+    - source: package main
+      style: secondary
+      start: 0
+      end: 12
+    - source: |
+        package main
+
+        // main starts the program.
+        func main() {}
+      style: secondary
+      start: 0
+      end: 57
+  ? "package main\n\nfunc main() {\n\t// body\n}\n"
+  : labels:
+    - source: // body
+      style: primary
+      start: 29
+      end: 36
+    - source: main
+      style: secondary
+      start: 8
+      end: 12
+    - source: package main
+      style: secondary
+      start: 0
+      end: 12
+    - source: "package main\n\nfunc main() {\n\t// body\n}\n"
+      style: secondary
+      start: 0
+      end: 39
+  ? |
+    package main
+
+    var x = 1 // trailing
+  : labels:
+    - source: // trailing
+      style: primary
+      start: 24
+      end: 35
+    - source: main
+      style: secondary
+      start: 8
+      end: 12
+    - source: package main
+      style: secondary
+      start: 0
+      end: 12
+    - source: |
+        package main
+
+        var x = 1 // trailing
+      style: secondary
+      start: 0
+      end: 36

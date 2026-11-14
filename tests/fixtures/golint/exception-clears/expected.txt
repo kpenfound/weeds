@@ -1,0 +1,7 @@
+api/api.go:6: errcheck: Error return value of `os.Remove` is not checked
+api/api.go:11: govet: unreachable: unreachable code
+api/api.go:14: unused: func unusedHelper is unused
+services/store/store.go:7: gocognit: cognitive complexity 21 of func `(*Store).Rebuild` is high (> 15) (baseline symbol "Store.Rebuild")
+services/store/store.go:25: unused: func leftover is unused
+worker/nest.go:4: nestif: `if a > 0` has complex nested blocks (complexity: 6) (baseline symbol "Classify")
+worker/sum.go:3: gocognit: cognitive complexity 21 of func `Sum` is high (> 15) (baseline symbol "Sum")

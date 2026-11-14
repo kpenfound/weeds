@@ -1,0 +1,2 @@
+//nolint
+// @ts-ignore

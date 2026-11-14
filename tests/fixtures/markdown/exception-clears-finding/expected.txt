@@ -1,0 +1,1 @@
+new.md:1: internal-markdown: internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist

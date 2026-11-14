@@ -1,0 +1,27 @@
+id: ts-public-member
+language: TypeScript
+rule:
+  any:
+    - kind: public_field_definition
+    - kind: method_definition
+    - kind: abstract_method_signature
+    - kind: method_signature
+    - kind: property_signature
+    - kind: index_signature
+    - kind: enum_assignment
+    - kind: property_identifier
+  not:
+    any:
+      - has:
+          kind: accessibility_modifier
+          regex: '^(private|protected)$'
+      - has:
+          field: name
+          kind: private_property_identifier
+  inside:
+    any:
+      - kind: class_body
+      - kind: interface_body
+      - kind: enum_body
+    inside:
+      matches: ts-exported-container

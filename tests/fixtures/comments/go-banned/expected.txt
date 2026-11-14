@@ -1,0 +1,13 @@
+cmd/app/main.go:3: go-comment-main: comment in package main
+internal/secret/secret.go:3: go-comment-internal: comment under internal/
+lib/header.go:1: go-comment-detached: doc comment is separated from its declaration by a blank line
+lib/lib.go:3: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note
+lib/lib.go:8: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+lib/lib.go:13: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+lib/lib.go:16: go-comment-code: commented-out code
+lib/lib.go:17: go-comment-code: commented-out code
+lib/lib.go:18: go-comment-code: commented-out code
+lib/lib.go:21: go-comment-detached: trailing comment
+lib/lib.go:23: go-comment-detached: doc comment is separated from its declaration by a blank line
+lib/lib.go:27: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note
+lib/lib.go:33: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier

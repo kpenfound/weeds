@@ -1,0 +1,47 @@
+id: go-comment-todo
+valid:
+  - |
+    package p
+
+    // Run starts the work.
+    func Run() {}
+  - |
+    package p
+
+    // todo in lower case is an ordinary word
+    func run() {}
+  - |
+    package p
+
+    // TODOS is not the marker
+    func run() {}
+invalid:
+  - |
+    package p
+
+    // TODO: handle the error
+    func run() {}
+  - |
+    package p
+
+    // FIXME this is wrong
+    func Run() {}
+  - |
+    package p
+
+    /*
+    Run starts the work.
+    FIXME: slow
+    */
+    func Run() {}
+  - |
+    package p
+
+    func run() {
+    	// TODO: later
+    }
+  - |
+    package p
+
+    //go:generate stringer -type=T TODO
+    type T int

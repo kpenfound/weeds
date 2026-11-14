@@ -1,0 +1,587 @@
+"""
+Fixture and harness tests for Weeds. A suite is a directory of cases under
+tests/fixtures; each case holds a workspace plus expected.txt (compared
+exactly after trimming) or expected-error.txt (one fragment per line that the
+failure must contain; a leading ! marks a fragment it must not contain).
+"""
+type WeedsTests {
+  let fixtures: Directory!
+  let generatorSource: File!
+
+  new(ws: Workspace!) {
+    self.fixtures = ws.directory("/tests/fixtures")
+    self.generatorSource = ws.file("/skills.dang")
+    self
+  }
+
+  """
+  Config loading, validation and the shared exception evaluator.
+  """
+  pub config: Void @check {
+    runSuite("config")
+  }
+
+  """
+  The harness's own comparison behaviour, on in-memory cases.
+  """
+  pub harness: Void @check {
+    let exact = judge(Expectation(name: "exact", text: "a\nb"), Outcome(failed: false, text: "a\nb"))
+    expect(exact == "", "a matching output must pass, got: " + exact)
+
+    let trimmed = judge(Expectation(name: "trimmed", text: "a\nb\n"), Outcome(failed: false, text: "\na\nb"))
+    expect(trimmed == "", "surrounding whitespace must not matter, got: " + trimmed)
+
+    let mismatch = judge(Expectation(name: "deliberate-mismatch", text: "one"), Outcome(failed: false, text: "two"))
+    expect(mismatch.contains("FAIL deliberate-mismatch"), "a mismatch must fail naming the case, got: " + mismatch)
+    expect(mismatch.contains("one") and mismatch.contains("two"), "a mismatch must show both texts, got: " + mismatch)
+
+    let inner = judge(Expectation(name: "inner-space", text: "a  b"), Outcome(failed: false, text: "a b"))
+    expect(inner != "", "inner whitespace must be compared exactly")
+
+    let fragments = Expectation(name: "fragments", fragments: ["alpha", "beta", "!gamma"], wantsError: true)
+    expect(judge(fragments, Outcome(failed: true, text: "alpha and beta")) == "", "an error holding every fragment must pass")
+    let lacking = judge(fragments, Outcome(failed: true, text: "alpha only"))
+    expect(lacking.contains("beta") and lacking.contains("lacks"), "a missing fragment must be named, got: " + lacking)
+    let forbidden = judge(fragments, Outcome(failed: true, text: "alpha beta gamma"))
+    expect(forbidden.contains("forbidden") and forbidden.contains("!gamma"), "a forbidden fragment must fail, got: " + forbidden)
+
+    let unexpectedSuccess = judge(fragments, Outcome(failed: false, text: "fine"))
+    expect(unexpectedSuccess.contains("expected an error"), "success where an error is expected must fail, got: " + unexpectedSuccess)
+    let unexpectedError = judge(Expectation(name: "boom", text: "fine"), Outcome(failed: true, text: "kaboom"))
+    expect(unexpectedError.contains("expected output") and unexpectedError.contains("kaboom"), "an error where output is expected must fail, got: " + unexpectedError)
+
+    let all = summarize([exact, mismatch, lacking, trimmed, inner])
+    expect(all.contains("3 of 5 cases failed"), "failures must be counted together, got: " + all)
+    expect(all.contains("deliberate-mismatch") and all.contains("inner-space") and all.contains("fragments"), "every failure must be reported together, got: " + all)
+    expect(summarize([exact, trimmed]) == "", "no failures must give an empty summary")
+
+    expect(fragmentLines("  a  \n\n b\n") == ["a", "b"], "fragment lines must be trimmed and non-empty")
+    null
+  }
+
+  """
+  Findings render as path:line: rule: message in one deterministic order.
+  """
+  pub findings: Void @check {
+    let unsorted = "b.go:3: zeta: last\na.go:10: alpha: later line\na.go:9: beta: same line, second rule\na.go:9: alpha: same line, first rule\nb.go:3: zeta: first"
+    let expected = "a.go:9: alpha: same line, first rule\na.go:9: beta: same line, second rule\na.go:10: alpha: later line\nb.go:3: zeta: first\nb.go:3: zeta: last"
+    let shared = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
+    let once = shared.sortedFindings(unsorted)
+    expect(once == expected, "findings must sort by path, numeric line, rule, message; got:\n" + once)
+    expect(shared.sortedFindings(unsorted) == once, "sorting the same findings twice must give identical output")
+    expect(shared.sortedFindings(expected) == expected, "sorted findings must stay as they are")
+    let rejected = { shared.sortedFindings("not a finding"); "accepted" } rescue { err: Error => err.message }
+    expect(rejected.contains("not a finding line"), "a malformed line must be rejected, got: " + rejected)
+    null
+  }
+
+  """
+  weeds.toml path globs.
+  """
+  pub globs: Void @check {
+    let shared = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
+    expect(shared.globMatches("tests/fixtures/**", "tests/fixtures/a/b.txt"), "** must match any depth")
+    expect(shared.globMatches("tests/fixtures", "tests/fixtures/a/b.txt"), "a directory path must cover everything under it")
+    expect(shared.globMatches("**/x.go", "x.go") and shared.globMatches("**/x.go", "a/b/x.go"), "**/ must match zero or more directories")
+    expect(shared.globMatches("*.md", "b.md"), "* must match within a segment")
+    expect(!shared.globMatches("*.md", "a/b.md"), "* must not cross a slash")
+    expect(shared.globMatches("a?c", "abc") and !shared.globMatches("a?c", "a/c"), "? must match one non-slash character")
+    expect(!shared.globMatches("a.b", "aXb"), "a dot must be literal")
+    expect(!shared.globMatches("src", "srcs/a.go"), "a name must not match a longer sibling name")
+    null
+  }
+
+  """
+  The shared scanning walk skips .git, vendor, node_modules and Weeds-owned
+  skill folders, yields hidden and gitignored files, and leaves the module's
+  workspace whole.
+  """
+  pub walk: Void @check {
+    let marker = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).ownerMarker
+    let tree = directory
+      .withNewFile(".git/config", "git\n")
+      .withNewFile("vendor/pkg/a.go", "vendor\n")
+      .withNewFile("node_modules/m/index.js", "module\n")
+      .withNewFile("sub/node_modules/z.js", "nested module\n")
+      .withNewFile("sub/vendor/y.go", "nested vendor\n")
+      .withNewFile(".agents/skills/owned/SKILL.md", "skill\n")
+      .withNewFile(".agents/skills/owned/.weeds-managed", marker)
+      .withNewFile(".agents/skills/owned/refs/deep.md", "deep\n")
+      .withNewFile(".agents/skills/unmarked/SKILL.md", "unmarked\n")
+      .withNewFile(".claude/skills/imposter/SKILL.md", "imposter\n")
+      .withNewFile(".claude/skills/imposter/.weeds-managed", "someone else\n")
+      .withNewFile(".hidden/file.txt", "hidden\n")
+      .withNewFile(".gitignore", "ignored.log\n")
+      .withNewFile("ignored.log", "ignored\n")
+      .withNewFile("src/main.go", "package main\n")
+    let w = weeds(ws: tree.asWorkspace)
+    let walked = w.scanFiles.join("\n")
+    let expected = ".agents/skills/unmarked/SKILL.md\n.claude/skills/imposter/.weeds-managed\n.claude/skills/imposter/SKILL.md\n.gitignore\n.hidden/file.txt\nignored.log\nsrc/main.go"
+    expect(walked == expected, "the walk must skip .git, vendor, node_modules and owned skill folders only; got:\n" + walked)
+    expect(w.scanFiles.join("\n") == walked, "walking twice must give identical output")
+    expect(w.ownedFolders == [".agents/skills/owned"], "only a folder with a valid marker is owned, got: " + w.ownedFolders.join(", "))
+    expect(w.source.file(".agents/skills/owned/.weeds-managed").contents == marker, "the workspace must keep the owned marker")
+    expect(w.source.file(".agents/skills/owned/SKILL.md").contents == "skill\n", "the workspace must keep owned skill files")
+    expect(w.source.file(".agents/skills/owned/refs/deep.md").contents == "deep\n", "the workspace must keep owned nested files")
+    expect(w.source.exists(".git/config") and w.source.exists("vendor/pkg/a.go") and w.source.exists("node_modules/m/index.js"), "the workspace must keep .git, vendor and node_modules")
+    null
+  }
+
+  """
+  The suppressions check over fixture workspaces: each directive, hidden and
+  gitignored files, skipped locations, named exceptions.
+  """
+  pub suppressions: Void @check {
+    runSuite("suppressions")
+  }
+
+  """
+  The markdown check over fixture workspaces: always-allowed categories, the
+  allowlist, stale entries and skills-looking folders without a marker.
+  """
+  pub markdown: Void @check {
+    runSuite("markdown")
+  }
+
+  """
+  The suppressions scan skips .git, vendor, node_modules and an owned skill
+  folder, but reads a skills-looking folder whose marker is wrong. The
+  directive text is built at run time so this file holds none.
+  """
+  pub suppressionsSkips: Void @check {
+    let marker = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).ownerMarker
+    let directive = "/" + "/nolint\n"
+    let tree = directory
+      .withNewFile(".git/hooks/pre-commit", directive)
+      .withNewFile("vendor/pkg/a.go", directive)
+      .withNewFile("node_modules/m/index.js", directive)
+      .withNewFile("sub/vendor/b.go", directive)
+      .withNewFile(".agents/skills/owned/SKILL.md", directive)
+      .withNewFile(".agents/skills/owned/.weeds-managed", marker)
+      .withNewFile(".claude/skills/imposter/SKILL.md", directive)
+      .withNewFile(".claude/skills/imposter/.weeds-managed", "someone else\n")
+      .withNewFile("src/main.go", "package main\n")
+    let report = weeds(ws: tree.asWorkspace).suppressionsReport
+    let expected = ".claude/skills/imposter/SKILL.md:1: nolint: inline suppression /" + "/nolint is not allowed; fix the code, or name an exception in weeds.toml"
+    expect(report == expected, "only the unmarked folder may be reported; got:\n" + report)
+    null
+  }
+
+  """
+  The comments check on fixture workspaces: Go and TS/JS, allowed and banned
+  forms, overlaps, grammars and a consumer ast-grep configuration.
+  """
+  pub comments: Void @check {
+    runSuite("comments")
+  }
+
+  """
+  The comments check's Dang logic (precedence, headers, adjacency, rule
+  registration) on in-memory ast-grep matches.
+  """
+  pub commentLogic: Void @check {
+    let shared = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
+
+    let unknown = { shared.classifyComments("a.go", "package a\n", sgMatches([sgMatch("go-comment-made-up", 0, 0, 0)])); "accepted" } rescue { err: Error => err.message }
+    expect(unknown.contains("go-comment-made-up") and unknown.contains("not registered"), "an unregistered rule id must fail loudly, got: " + unknown)
+    expect(shared.classifyComments("a.go", "package a\n// c\n", sgMatches([sgMatch("unused-suppression", 1, 0, 1)])) == "", "ast-grep's built-in unused-suppression must be ignored")
+
+    let layers = sgMatches([sgMatch("go-comment-not-doc", 1, 0, 1), sgMatch("go-doc-candidate", 1, 0, 1), sgMatch("go-comment-main", 1, 0, 1)])
+    expect(shared.classifyComments("a.go", "package main\n// c\nvar x = 1\n", layers) == "a.go:2: go-comment-main: comment in package main", "one comment must give one finding, the most specific rule winning")
+    let todoWins = sgMatches([sgMatch("go-comment-main", 1, 0, 1), sgMatch("go-comment-todo", 1, 0, 1)])
+    expect(shared.classifyComments("a.go", "package main\n// TODO c\n", todoWins).contains("go-comment-todo"), "TODO must win over a location rule")
+
+    let attached = shared.classifyComments("a.go", "package a\n// Doc.\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
+    expect(attached == "", "an adjacent doc comment passes, got: " + attached)
+    let gap = shared.classifyComments("a.go", "package a\n// Doc.\n\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
+    expect(gap == "a.go:2: go-comment-detached: doc comment is separated from its declaration by a blank line", "a blank line detaches a doc comment, got: " + gap)
+    let viaDirective = shared.classifyComments("a.go", "package a\n// Doc.\n//go:noinline\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
+    expect(viaDirective == "", "a directive line must not detach a doc comment, got: " + viaDirective)
+    let directiveThenGap = shared.classifyComments("a.go", "package a\n// Doc.\n//go:noinline\n\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
+    expect(directiveThenGap.contains("go-comment-detached"), "a blank line after the directive still detaches, got: " + directiveThenGap)
+    let blockDoc = shared.classifyComments("a.ts", "/**\n * Doc.\n */\nexport const a = 1;\n", sgMatches([sgMatch("ts-doc-candidate", 0, 0, 2)]))
+    expect(blockDoc == "", "a multi-line doc block directly above its declaration passes, got: " + blockDoc)
+    let blockGap = shared.classifyComments("a.ts", "/**\n * Doc.\n */\n\nexport const a = 1;\n", sgMatches([sgMatch("ts-doc-candidate", 0, 0, 2)]))
+    expect(blockGap == "a.ts:1: ts-comment-detached: doc comment is separated from its declaration by a blank line", "a doc block is judged from its last line, got: " + blockGap)
+    let trailing = shared.classifyComments("a.go", "package a\nvar A = 1 // note\n", sgMatches([sgMatch("go-doc-candidate", 1, 12, 1)]))
+    expect(trailing == "a.go:2: go-comment-detached: trailing comment", "a trailing comment is detached, got: " + trailing)
+
+    let licence = "// Copyright 2024 Example Corp.\n// Licensed under MIT.\n\npackage main\n"
+    let headerMatches = sgMatches([sgMatch("go-comment-main", 0, 0, 0), sgMatch("go-comment-main", 1, 0, 1)])
+    expect(shared.classifyComments("a.go", licence, headerMatches) == "", "a licence header passes in package main")
+    let plain = "// Notes about the licence of this file.\n// More notes.\n\npackage main\n"
+    expect(shared.classifyComments("a.go", plain, headerMatches).contains("go-comment-main"), "a header without a licence or copyright line is not a licence header")
+    let headerTodo = "// Copyright 2024 Example Corp.\n// TODO: year.\n\npackage main\n"
+    expect(shared.classifyComments("a.go", headerTodo, sgMatches([sgMatch("go-comment-todo", 1, 0, 1), sgMatch("go-comment-main", 1, 0, 1)])) == "a.go:2: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note", "a TODO inside a licence header is reported")
+    let tsHeader = "/*\n * Copyright 2024 Example Corp.\n */\n\nexport const a = 1;\n"
+    expect(shared.classifyComments("a.ts", tsHeader, sgMatches([sgMatch("ts-comment-not-doc", 0, 0, 2)])) == "", "a block licence header passes")
+
+    let generated = sgMatches([sgMatch("go-comment-todo", 2, 0, 2), sgMatch("go-comment-not-doc", 3, 0, 3)])
+    expect(shared.classifyComments("g.go", "// Code generated by tool; DO NOT EDIT.\n\n// TODO x\n// c\npackage g\n", generated) == "", "a generated Go file has no findings")
+    expect(shared.classifyComments("g.go", "package g\n// Code generated by tool; DO NOT EDIT.\n// TODO x\n", sgMatches([sgMatch("go-comment-todo", 2, 0, 2)])) != "", "the generated marker only counts before the first code line")
+    expect(shared.classifyComments("g.ts", "// @generated\n// TODO x\nexport const a = 1;\n", sgMatches([sgMatch("ts-comment-todo", 1, 0, 1)])) == "", "a generated TS file has no findings")
+    expect(shared.classifyComments("g.ts", "// generated by the api tool\n// TODO x\nexport const a = 1;\n", sgMatches([sgMatch("ts-comment-todo", 1, 0, 1)])) == "", "a 'generated by' TS file has no findings")
+
+    let ignored = shared.classifyComments("a.go", "package a\n// ast-grep-ignore\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
+    expect(ignored == "a.go:2: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier", "an ast-grep-ignore directive is never a doc comment, got: " + ignored)
+    null
+  }
+
+  """
+  The go-lint check over fixture workspaces, through the real golangci-lint
+  image: every finding category across several Go modules, a consumer
+  golangci-lint config that must change nothing, the baseline and exceptions.
+  """
+  pub golint: Void @check {
+    runSuite("golint")
+  }
+
+  """
+  The golangci-lint image is pinned by an exact tag and a sha256 digest, never
+  latest.
+  """
+  pub golintPin: Void @check {
+    let ref = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).goLintImageRef
+    expect(ref.containsMatch(`^[a-z0-9./-]+:v[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$`), "the image must carry an exact vX.Y.Z tag and a sha256 digest, got: " + ref)
+    expect(!ref.contains("latest"), "the image must not follow latest, got: " + ref)
+    null
+  }
+
+  """
+  Every rule file in the comment packs has a rule test and a snapshot, every
+  scanned rule id is registered, and ast-grep's rule tests pass for the Go,
+  TypeScript and derived TSX packs.
+  """
+  pub ruleTests: Void @check {
+    let shared = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
+    let goRules = shared.goRules
+    let typescriptRules = shared.typescriptRules
+    let tsxRules = shared.tsxRules
+    let problems = ruleFileGaps("rules/go", goRules) + ruleFileGaps("rules/typescript", typescriptRules) + ruleFileGaps("tsx", tsxRules)
+    let scanned = shared.commentScanRules
+    (ruleIdsOf(goRules) + ruleIdsOf(typescriptRules)).each { id =>
+      if (!scanned.contains(id)) {
+        problems += ["rule " + id + " is not registered in registry.dang (commentsRules or commentMarkerRules)"]
+      }
+    }
+    shared.registeredCommentRules.each { id =>
+      if (!id.hasSuffix("-detached") and !ruleIdsOf(goRules).contains(id) and !ruleIdsOf(typescriptRules).contains(id)) {
+        problems += ["registered comments rule " + id + " has no rule file"]
+      }
+    }
+    if (!problems.isEmpty) {
+      raise "rule test gaps:\n- " + problems.join("\n- ")
+    }
+    let tool = shared.astGrep
+    let reports = [runRuleTests(tool, goRules), runRuleTests(tool, typescriptRules), runRuleTests(tool, tsxRules)]
+    reports.each { report =>
+      expect(report.contains("passed; 0 failed") and !report.contains("FAIL"), "ast-grep rule tests did not pass:\n" + report)
+    }
+    null
+  }
+
+  """
+  The generated preset enables the correctness, dead-code, godox and
+  complexity linters and nothing else, and never lets golangci-lint cap or
+  merge issues.
+  """
+  pub golintPreset: Void @check {
+    let preset = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).goLintPresetText
+    expect(preset.contains("default: none"), "the preset must start from no linters, got:\n" + preset)
+    let enabled = ["errcheck", "govet", "ineffassign", "staticcheck", "unused", "godox", "funlen", "gocognit", "nestif", "dupl"]
+    enabled.each { name =>
+      expect(preset.contains("    - " + name + "\n"), "the preset must enable " + name + ", got:\n" + preset)
+    }
+    expect(preset.contains("uniq-by-line: false") and preset.contains("max-issues-per-linter: 0") and preset.contains("max-same-issues: 0"), "the preset must report every issue, got:\n" + preset)
+    null
+  }
+
+  """
+  The rule-test gap detector fails on a rule without a test, without a
+  snapshot, or whose file name differs from its id.
+  """
+  pub ruleTestGaps: Void @check {
+    let complete = directory
+      .withNewFile("rules/a.yml", "id: a\nlanguage: Go\n")
+      .withNewFile("tests/a-test.yml", "id: a\n")
+      .withNewFile("tests/__snapshots__/a-snapshot.yml", "id: a\n")
+    expect(ruleFileGaps("pack", complete).isEmpty, "a rule with a test and a snapshot has no gap")
+    let noTest = complete.withNewFile("rules/b.yml", "id: b\n").withNewFile("tests/__snapshots__/b-snapshot.yml", "id: b\n")
+    let noTestGaps = ruleFileGaps("pack", noTest).join("\n")
+    expect(noTestGaps.contains("rule b has no rule test"), "a missing test must be reported, got: " + noTestGaps)
+    let noSnapshot = complete.withNewFile("rules/c.yml", "id: c\n").withNewFile("tests/c-test.yml", "id: c\n")
+    let noSnapshotGaps = ruleFileGaps("pack", noSnapshot).join("\n")
+    expect(noSnapshotGaps.contains("rule c has no snapshot"), "a missing snapshot must be reported, got: " + noSnapshotGaps)
+    let wrongId = complete.withNewFile("rules/d.yml", "id: other\n").withNewFile("tests/d-test.yml", "id: d\n").withNewFile("tests/__snapshots__/d-snapshot.yml", "id: d\n")
+    let wrongIdGaps = ruleFileGaps("pack", wrongId).join("\n")
+    expect(wrongIdGaps.contains("rules/d.yml must declare id: d"), "a file name that differs from its id must be reported, got: " + wrongIdGaps)
+    null
+  }
+
+  """
+  go-lint runs once per go.mod outside vendor, testdata and node_modules,
+  skipping a module that holds no Go files.
+  """
+  pub golintModules: Void @check {
+    let tree = directory
+      .withNewFile("go.mod", "module root\n")
+      .withNewFile("main.go", "package main\n")
+      .withNewFile("a/go.mod", "module a\n")
+      .withNewFile("a/x.go", "package a\n")
+      .withNewFile("a/b/go.mod", "module b\n")
+      .withNewFile("a/b/y.go", "package b\n")
+      .withNewFile("tools/go.mod", "module tools\n")
+      .withNewFile("tools/notes.txt", "no Go here\n")
+      .withNewFile("only-testdata/go.mod", "module t\n")
+      .withNewFile("only-testdata/testdata/z.go", "package z\n")
+      .withNewFile("testdata/m/go.mod", "module m\n")
+      .withNewFile("testdata/m/m.go", "package m\n")
+      .withNewFile("vendor/v/go.mod", "module v\n")
+      .withNewFile("vendor/v/v.go", "package v\n")
+      .withNewFile("node_modules/n/go.mod", "module n\n")
+      .withNewFile("node_modules/n/n.go", "package n\n")
+      .withNewFile("outer/go.mod", "module outer\n")
+      .withNewFile("outer/inner/go.mod", "module inner\n")
+      .withNewFile("outer/inner/i.go", "package inner\n")
+    let modules = weeds(ws: tree.asWorkspace).goLintModules.join(",")
+    expect(modules == ".,a,a/b,outer/inner", "go-lint must lint each module that holds Go files, once; got: " + modules)
+    null
+  }
+
+  """
+  The installer's golden changesets over fixture workspaces and fixture skill
+  trees: targets, ownership, replacement, removal and source validation.
+  """
+  pub generate: Void @check {
+    runSuite("generate")
+  }
+
+  """
+  The installed-skills check over fixture workspaces and fixture skill trees.
+  """
+  pub installedSkills: Void @check {
+    runSuite("installed-skills")
+  }
+
+  """
+  Through the real installed-skills check: it passes on generator output,
+  fails naming every path a hand edit changed in either target, passes with
+  nothing to install, and fails naming an unmarked folder. Also, the real
+  generator restores a hand-edited owned folder.
+  """
+  pub installedSkillsEntryPoint: Void @check {
+    let tree = installedWorkspace(directory.withNewFile("weeds.toml", "[skills]\nsubset = [\"no-deltas\", \"unslop\"]\n"), skillSource("full"))
+    let clean = weeds(ws: tree.asWorkspace, skillSource: skillSource("full"))
+    expect(checkResult(clean.installedSkills) == "passed", "the check must pass on generator output, got: " + checkResult(clean.installedSkills))
+    let edited = tree
+      .withNewFile(".claude/skills/no-deltas/SKILL.md", "hand edited\n")
+      .withNewFile(".agents/skills/unslop/extra.txt", "extra\n")
+      .withoutFile(".agents/skills/no-deltas/SKILL.md")
+    let broken = weeds(ws: edited.asWorkspace, skillSource: skillSource("full"))
+    let failure = checkResult(broken.installedSkills)
+    ["skill-modified", ".claude/skills/no-deltas/SKILL.md", "skill-removed", ".agents/skills/unslop/extra.txt", "skill-added", ".agents/skills/no-deltas/SKILL.md"].each { part =>
+      expect(failure.contains(part), "the check must report " + part + ", got: " + failure)
+    }
+    let restored = broken.generate.after
+    expect(restored.file(".claude/skills/no-deltas/SKILL.md").contents == skillSource("full").file("no-deltas/SKILL.md").contents, "generate must restore a hand-edited owned file")
+    expect(!restored.exists(".agents/skills/unslop/extra.txt"), "generate must remove an extra file from an owned folder")
+    expect(restored.exists(".agents/skills/no-deltas/SKILL.md"), "generate must restore a deleted file in an owned folder")
+    let afterGenerate = checkResult(weeds(ws: restored.asWorkspace, skillSource: skillSource("full")).installedSkills)
+    expect(afterGenerate == "passed", "the check must pass after generate, got: " + afterGenerate)
+
+    let nothing = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace, skillSource: skillSource("full"))
+    expect(checkResult(nothing.installedSkills) == "passed", "the check must pass with nothing to install")
+    expect(nothing.installedSkillsReport == "no findings", "nothing to install must report no findings")
+    let refused = { nothing.generate.addedPaths.join(","); "generated" } rescue { err: Error => err.message }
+    expect(refused.contains("nowhere to install skills"), "generate must fail where the check passes, got: " + refused)
+
+    let conflict = weeds(ws: directory.withNewFile("AGENTS.md", "x\n").withNewFile(".agents/skills/unslop/SKILL.md", "mine\n").asWorkspace, skillSource: skillSource("full"))
+    let conflictFailure = checkResult(conflict.installedSkills)
+    expect(conflictFailure.contains(".agents/skills/unslop") and conflictFailure.contains("skill-conflict"), "an unmarked folder must fail the check naming it, got: " + conflictFailure)
+    null
+  }
+
+  """
+  One consumer-like workspace that uses every weeds.toml section, through the
+  real entry points of all five checks and the installer: findings from each
+  check, an exception, an allowlisted markdown file, a baselined complexity
+  finding, a subset install, and a hand-edited owned skill folder that the
+  scans skip while installed-skills reports it and generate restores it.
+  """
+  pub consumer: Void @check {
+    runSuite("consumer")
+  }
+
+  """
+  A module that does not build cannot be linted: go-lint raises instead of
+  passing. The broken module is built here so no committed fixture breaks the
+  repository's own go-lint run.
+  """
+  pub golintBuildFailure: Void @check {
+    let tree = directory
+      .withNewFile("go.mod", "module example.com/broken\n\ngo 1.22\n")
+      .withNewFile("broken.go", "package broken\n\nfunc Value() int {\n\treturn missing\n}\n")
+    let outcome = { weeds(ws: tree.asWorkspace).goLintReport } rescue { err: Error => err.message }
+    expect(outcome.contains("go-lint: golangci-lint could not build module . (the workspace root)"), "a build failure must raise naming the module, got: " + outcome)
+    expect(outcome.contains("undefined: missing"), "the build error must be shown, got: " + outcome)
+    null
+  }
+
+  """
+  The skills pin is a full 40-character SHA and the installer holds no branch,
+  tag, latest or credential token. The validator is tested on in-memory text
+  first, then applied to skills.dang.
+  """
+  pub skillsPin: Void @check {
+    let sha = "2210631f5dfab54241980a94b1ff3b21460328df"
+    let good = "let skillsRepository = \"https://github.com/kpenfound/skills\"\n\nlet skillsCommit = \"" + sha + "\"\n\nlet fetchSkills(): Directory! {\n  git(skillsRepository).commit(skillsCommit).tree\n}\n"
+    expect(pinProblems(good).isEmpty, "a full SHA pin must pass, got: " + pinProblems(good).join("; "))
+    ["main", "v1.2.3", "latest", "2210631f5dfab54241980a94b1ff3b21460328d", sha + "0", "2210631F5DFAB54241980A94B1FF3B21460328DF", "2210631f5dfab54241980a94b1ff3b21460328dg", ""].each { bad =>
+      let problems = pinProblems(good.replace(sha, bad))
+      expect(problems.any { p => p.contains("40-character") }, "pin " + quoted(bad) + " must be rejected, got: " + problems.join("; "))
+    }
+    expect(!pinProblems("let skillsRepository = \"https://github.com/kpenfound/skills\"\n").isEmpty, "a missing pin line must be rejected")
+    expect(!pinProblems(good.replace("https://github.com/kpenfound/skills", "https://user@github.com/kpenfound/skills")).isEmpty, "a repository URL with user info must be rejected")
+    expect(!pinProblems(good.replace("https://github.com/kpenfound/skills", "https://github.com/other/skills")).isEmpty, "another repository must be rejected")
+    pinTokens.each { word =>
+      let problems = pinProblems(good + "let x = fetch" + word + "()\n")
+      expect(problems.any { p => p.contains(quoted(word)) }, "token " + quoted(word) + " must be rejected, got: " + problems.join("; "))
+    }
+    let real = pinProblems(generatorSource.contents)
+    expect(real.isEmpty, "skills.dang must pin a full SHA with no lookup or credential tokens:\n- " + real.join("\n- "))
+    null
+  }
+
+  let skillSource(name: String!): Directory! {
+    fixtures.directory("skill-sources/" + name)
+  }
+
+  let installedWorkspace(base: Directory!, tree: Directory!): Directory! {
+    let names = ["no-deltas", "unslop"]
+    [".agents/skills", ".claude/skills"].reduce(base) { dir, target =>
+      names.reduce(dir) { inner, name =>
+        inner
+          .withDirectory(target + "/" + name, tree.directory(name))
+          .withNewFile(target + "/" + name + "/.weeds-managed", "github.com/kpenfound/weeds\n")
+      }
+    }
+  }
+
+  let ownedFolders(base: Directory!, tree: Directory!, names: [String!]!): Directory! {
+    names.reduce(base) { dir, name =>
+      dir
+        .withDirectory(".agents/skills/" + name, tree.directory(name))
+        .withNewFile(".agents/skills/" + name + "/.weeds-managed", "github.com/kpenfound/weeds\n")
+    }
+  }
+
+  let consumerReport(caseDir: Directory!, workspace: Directory!): String! {
+    let source = skillSource("full")
+    let tree = ownedFolders(workspace, source, ["no-deltas", "unslop", "no-comments"])
+      .withDirectory(".agents/skills/no-deltas", caseDir.directory("hand-edits"))
+    let subject = weeds(ws: tree.asWorkspace, skillSource: source)
+    let scans = [
+      section("comments", checkResult(subject.comments))
+      section("suppressions", checkResult(subject.suppressions))
+      section("markdown", checkResult(subject.markdown))
+    ]
+    scans.each { scan =>
+      expect(!scan.contains(".agents/skills"), "the scans must skip the owned skill folder, got:\n" + scan)
+    }
+    let installed = section("installed-skills", checkResult(subject.installedSkills))
+    ["SKILL.md", "helper.ts", "extra.md"].each { name =>
+      expect(installed.contains(".agents/skills/no-deltas/" + name), "installed-skills must report the hand edit to " + name + ", got:\n" + installed)
+    }
+    let changes = subject.generate
+    let restored = weeds(ws: changes.after.asWorkspace, skillSource: source)
+    expect(restored.installedSkillsReport == "no findings", "generate must restore every owned folder, got:\n" + restored.installedSkillsReport)
+    (scans + [section("go-lint", checkResult(subject.goLint)), installed, section("generate", describeChanges(changes))]).join("\n\n")
+  }
+
+  let section(name: String!, body: String!): String! {
+    "== " + name + " ==\n" + body
+  }
+
+  let runSuite(suite: String!): Void {
+    let names = fixtures.entries(path: suite).map { entry => entry.trimSuffix("/") }
+    if (names.isEmpty) {
+      raise "suite " + suite + " has no cases"
+    }
+    let message = summarize(names.map { name => runCase(suite, name) })
+    if (message != "") {
+      raise message
+    }
+    null
+  }
+
+  let runCase(suite: String!, name: String!): String! {
+    let label = suite + "/" + name
+    let caseDir = fixtures.directory(label)
+    let wantsOutput = caseDir.exists("expected.txt")
+    let wantsError = caseDir.exists("expected-error.txt")
+    if (wantsOutput == wantsError) {
+      return "FAIL " + label + ": a case needs exactly one of expected.txt and expected-error.txt"
+    }
+    let expectation = Expectation(
+      name: label
+      text: if (wantsOutput) { caseDir.file("expected.txt").contents } else { "" }
+      fragments: if (wantsError) { fragmentLines(caseDir.file("expected-error.txt").contents) } else { [] }
+      wantsError: wantsError
+    )
+    judge(expectation, attempt(suite, caseDir))
+  }
+
+  let attempt(suite: String!, caseDir: Directory!): Outcome! {
+    { Outcome(failed: false, text: reportFor(suite, caseDir, materialize(caseDir))) } rescue {
+      err: Error => Outcome(failed: true, text: err.message)
+    }
+  }
+
+  let materialize(caseDir: Directory!): Directory! {
+    let base = caseDir.directory("workspace")
+    let named = if (base.exists("gitignore.fixture")) {
+      base.withFile(".gitignore", base.file("gitignore.fixture")).withoutFile("gitignore.fixture")
+    } else {
+      base
+    }
+    if (caseDir.exists("symlinks.txt")) {
+      fragmentLines(caseDir.file("symlinks.txt").contents).reduce(named) { dir, row =>
+        let parts = row.split(" -> ")
+        dir.withSymlink(parts[1]!.trimSpace, parts[0]!.trimSpace)
+      }
+    } else {
+      named
+    }
+  }
+
+  let reportFor(suite: String!, caseDir: Directory!, workspace: Directory!): String! {
+    let source = if (caseDir.exists("source.txt")) { caseDir.file("source.txt").contents.trimSpace } else { "full" }
+    let subject = weeds(ws: workspace.asWorkspace, skillSource: skillSource(source))
+    case (suite) {
+      "config" => if (caseDir.exists("findings.txt")) {
+        let lines = caseDir.file("findings.txt").contents.split("\n")
+        if (!lines[0]!.hasPrefix("check:")) {
+          raise "findings.txt must start with a check: line"
+        }
+        subject.evaluateCheck(lines[0]!.trimPrefix("check:").trimSpace, lines.dropFirst(1).join("\n"))
+      } else {
+        subject.settingsReport
+      }
+      "suppressions" => subject.suppressionsReport
+      "markdown" => subject.markdownReport
+      "comments" => subject.commentsReport
+      "golint" => subject.goLintReport
+      "generate" => describeChanges(subject.generate)
+      "consumer" => consumerReport(caseDir, workspace)
+      "installed-skills" => {
+        let report = subject.installedSkillsReport
+        let passed = subject.installedSkills.pass
+        if (passed != (report == "no findings")) {
+          raise "the installed-skills check and its report disagree: check passed " + toString(passed) + ", report:\n" + report
+        }
+        report
+      }
+      else => raise "no report is registered for suite " + suite
+    }
+  }
+}

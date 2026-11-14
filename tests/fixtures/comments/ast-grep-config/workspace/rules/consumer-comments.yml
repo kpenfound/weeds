@@ -1,0 +1,6 @@
+id: consumer-comments
+language: Go
+severity: error
+message: a consumer rule on every comment
+rule:
+  kind: comment

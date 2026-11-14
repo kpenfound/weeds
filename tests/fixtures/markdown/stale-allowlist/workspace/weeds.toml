@@ -1,0 +1,6 @@
+[markdown]
+allowlist = [
+  "gone/plan.md",
+  "README.md",
+  "notes/design.md",
+]

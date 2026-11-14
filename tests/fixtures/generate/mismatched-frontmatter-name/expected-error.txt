@@ -1,0 +1,2 @@
+skill "simple-code": frontmatter name "simple_code" must equal the folder name
+!skill "no-deltas"

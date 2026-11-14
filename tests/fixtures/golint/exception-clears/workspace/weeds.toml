@@ -1,0 +1,8 @@
+[[exceptions]]
+rule = "godox"
+paths = ["api/**"]
+reason = "tracked elsewhere"
+
+[[exceptions]]
+check = "go-lint"
+paths = ["worker/dup.go", "worker/long.go"]

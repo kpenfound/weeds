@@ -1,0 +1,6 @@
+exceptions: 0
+markdown allowlist: none
+go-lint baseline: 2
+- gocognit internal/store/store.go Store.Load (line 1)
+- funlen cmd/tool/main.go (line 7)
+skills: no-comments, lint-discipline, simple-code, typescript-best-practices, unslop, no-deltas, behavioral-testing

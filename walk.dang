@@ -1,0 +1,83 @@
+let skippedNames: [String!]! = [".git", "vendor", "node_modules"]
+
+let isRealDirectory(source: Directory!, path: String!): Boolean! {
+  source.exists(path, expectedType: ExistsType.DIRECTORY_TYPE, doNotFollowSymlinks: true)
+}
+
+let isRealFile(source: Directory!, path: String!): Boolean! {
+  source.exists(path, expectedType: ExistsType.REGULAR_TYPE, doNotFollowSymlinks: true)
+}
+
+let mergeStrings(left: [String!]!, right: [String!]!): [String!]! {
+  let out: [String!]! = []
+  let i = 0
+  let j = 0
+  loop {
+    if (i >= left.length and j >= right.length) {
+      break
+    }
+    if (j >= right.length or (i < left.length and left[i]! <= right[j]!)) {
+      out += [left[i]!]
+      i += 1
+    } else {
+      out += [right[j]!]
+      j += 1
+    }
+  }
+  out
+}
+
+let sortStrings(items: [String!]!): [String!]! {
+  if (items.length <= 1) {
+    items
+  } else {
+    let middle = items.length / 2
+    mergeStrings(sortStrings(items.takeFirst(middle)), sortStrings(items.dropFirst(middle)))
+  }
+}
+
+let findOwnedFolders(source: Directory!): [String!]! {
+  let owned: [String!]! = []
+  skillsDirectories.each { target =>
+    let agent = target.trimSuffix("/skills")
+    if (isRealDirectory(source, agent) and isRealDirectory(source, target)) {
+      source.entries(path: target).each { entry =>
+        let folder = target + "/" + entry.trimSuffix("/")
+        let marker = folder + "/" + markerFile
+        if (isRealDirectory(source, folder) and isRealFile(source, marker) and isOwnerMarker(source.file(marker).contents)) {
+          owned += [folder]
+        }
+      }
+    }
+  }
+  sortStrings(owned)
+}
+
+let scanRoot(source: Directory!, owned: [String!]!): Directory! {
+  source.filter(exclude: skippedNames + skippedNames.map { name => "**/" + name } + owned)
+}
+
+let skipsPath(path: String!, owned: [String!]!): Boolean! {
+  path.split("/").any { part => skippedNames.contains(part) } or owned.any { folder => path == folder or path.hasPrefix(folder + "/") }
+}
+
+let withoutDirectories(listed: [String!]!): [String!]! {
+  if (listed.any { path => path.hasSuffix("/") }) {
+    listed.filter { path => !path.hasSuffix("/") }
+  } else {
+    let directories: Map[Boolean!]! = [:]
+    listed.each { path =>
+      let parts = path.split("/")
+      parts.dropLast.each { part, index =>
+        directories = directories.with(parts.takeFirst(index + 1).join("/"), true)
+      }
+    }
+    listed.filter { path => !directories.has(path) }
+  }
+}
+
+let walkFiles(source: Directory!): [String!]! {
+  let owned = findOwnedFolders(source)
+  let listed = scanRoot(source, owned).glob("**/*").map { path => path.trimPrefix("./") }
+  sortStrings(withoutDirectories(listed).filter { path => !skipsPath(path, owned) })
+}

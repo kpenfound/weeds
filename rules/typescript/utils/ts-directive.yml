@@ -1,0 +1,9 @@
+id: ts-directive
+language: TypeScript
+rule:
+  kind: comment
+  any:
+    - regex: '^///\s*<'
+    - regex: '^(//|/\*+)\s*@ts-check\b'
+    - regex: '^(//|/\*+)\s*@(jsx\w*|flow)\b'
+    - regex: '^//[#@]\s*source(Mapping)?URL='

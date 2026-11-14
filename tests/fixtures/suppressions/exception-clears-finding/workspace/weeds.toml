@@ -1,0 +1,4 @@
+[[exceptions]]
+check = "suppressions"
+paths = ["legacy/**"]
+reason = "legacy code is being rewritten"

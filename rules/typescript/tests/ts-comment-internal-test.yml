@@ -1,0 +1,26 @@
+id: ts-comment-internal
+valid:
+  - |
+    /// <reference path="x.d.ts" />
+    export const a = 1;
+  - |
+    // @ts-check
+    export const a = 1;
+  - |
+    //# sourceMappingURL=a.js.map
+  - |
+    export const a = 1;
+invalid:
+  - |
+    /** Starts the work. */
+    export function run() {}
+  - |
+    function run() {
+      // body
+    }
+  - |
+    // plain comment
+    const a = 1;
+  - |
+    // @ts-ignore
+    const a: number = "x";

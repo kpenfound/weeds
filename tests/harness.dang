@@ -1,0 +1,111 @@
+type Expectation {
+  name: String!
+  text: String! = ""
+  fragments: [String!]! = []
+  wantsError: Boolean! = false
+}
+
+type Outcome {
+  failed: Boolean!
+  text: String!
+}
+
+let fragmentLines(text: String!): [String!]! {
+  text.split("\n").map { row => row.trimSpace }.filter { row => row != "" }
+}
+
+let missingFragments(fragments: [String!]!, text: String!): [String!]! {
+  fragments.filter { f => !f.hasPrefix("!") and !text.contains(f) }
+}
+
+let forbiddenFragments(fragments: [String!]!, text: String!): [String!]! {
+  fragments.filter { f => f.hasPrefix("!") and text.contains(f.trimPrefix("!")) }
+}
+
+let judge(expectation: Expectation!, outcome: Outcome!): String! {
+  let head = "FAIL " + expectation.name + ": "
+  if (expectation.wantsError and !outcome.failed) {
+    head + "expected an error but the case succeeded with:\n" + outcome.text
+  } else if (expectation.wantsError) {
+    let missing = missingFragments(expectation.fragments, outcome.text)
+    let forbidden = forbiddenFragments(expectation.fragments, outcome.text)
+    if (!missing.isEmpty) {
+      head + "error lacks expected fragment(s):\n  " + missing.join("\n  ") + "\nactual error:\n" + outcome.text
+    } else if (!forbidden.isEmpty) {
+      head + "error holds forbidden fragment(s):\n  " + forbidden.join("\n  ") + "\nactual error:\n" + outcome.text
+    } else {
+      ""
+    }
+  } else if (outcome.failed) {
+    head + "expected output but got an error:\n" + outcome.text
+  } else if (outcome.text.trimSpace != expectation.text.trimSpace) {
+    head + "output differs\n--- expected\n" + expectation.text.trimSpace + "\n--- actual\n" + outcome.text.trimSpace
+  } else {
+    ""
+  }
+}
+
+let summarize(verdicts: [String!]!): String! {
+  let failures = verdicts.filter { verdict => verdict != "" }
+  if (failures.isEmpty) {
+    ""
+  } else {
+    toString(failures.length) + " of " + toString(verdicts.length) + " cases failed:\n\n" + failures.join("\n\n")
+  }
+}
+
+let expect(ok: Boolean!, message: String!): Void {
+  if (!ok) {
+    raise message
+  }
+  null
+}
+
+let escapeBody(text: String!): String! {
+  text.replace("\\", "\\\\").replace("\n", "\\n")
+}
+
+let describeChanges(changes: Changeset!): String! {
+  let rows: [String!]! = []
+  changes.addedPaths.filter { path => !path.hasSuffix("/") }.each { path =>
+    rows += ["+ " + path + " " + escapeBody(changes.after.file(path).contents)]
+  }
+  changes.modifiedPaths.filter { path => !path.hasSuffix("/") }.each { path =>
+    rows += ["~ " + path + " " + escapeBody(changes.after.file(path).contents)]
+  }
+  changes.removedPaths.each { path =>
+    if (path.hasSuffix("/")) {
+      let folder = path.trimSuffix("/")
+      changes.before.directory(folder).glob("**/*").filter { inner => !inner.hasSuffix("/") }.each { inner =>
+        rows += ["- " + folder + "/" + inner]
+      }
+    } else {
+      rows += ["- " + path]
+    }
+  }
+  if (rows.isEmpty) {
+    "no change"
+  } else {
+    sortRows(rows).join("\n")
+  }
+}
+
+let sortRows(rows: [String!]!): [String!]! {
+  rows.reduce([] :: [String!]!) { sorted, row =>
+    let before = sorted.filter { other => other <= row }
+    let after = sorted.filter { other => other > row }
+    before + [row] + after
+  }
+}
+
+let quoted(text: String!): String! {
+  "\"" + text + "\""
+}
+
+let checkResult(check: Check!): String! {
+  if (check.pass) {
+    "passed"
+  } else {
+    check.error.message ?? "the check failed without a message"
+  }
+}

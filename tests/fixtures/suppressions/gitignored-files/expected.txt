@@ -1,0 +1,2 @@
+build/out.ts:2: ts-nocheck: inline suppression @ts-nocheck is not allowed; fix the code, or name an exception in weeds.toml
+ignored.go:5: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml

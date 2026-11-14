@@ -1,0 +1,41 @@
+type SuppressionDirective {
+  rule: String!
+  pattern: String!
+  shown: String!
+}
+
+let suppressionDirectives: [SuppressionDirective!]! = [
+  SuppressionDirective(rule: "nolint", pattern: `//\s*nolint\b`, shown: "//nolint")
+  SuppressionDirective(rule: "lint-ignore", pattern: `\blint:ignore\b`, shown: "lint:ignore")
+  SuppressionDirective(rule: "eslint-disable", pattern: `\beslint-disable\b`, shown: "eslint-disable")
+  SuppressionDirective(rule: "ts-expect-error", pattern: `@ts-expect-error\b`, shown: "@ts-expect-error")
+  SuppressionDirective(rule: "ts-ignore", pattern: `@ts-ignore\b`, shown: "@ts-ignore")
+  SuppressionDirective(rule: "ts-nocheck", pattern: `@ts-nocheck\b`, shown: "@ts-nocheck")
+  SuppressionDirective(rule: "ast-grep-ignore", pattern: `\bast-grep-ignore\b`, shown: "ast-grep-ignore")
+  SuppressionDirective(rule: "noqa", pattern: `(?i:#\s*noqa\b)`, shown: "# noqa")
+]
+
+let suppressionMessage(directive: SuppressionDirective!): String! {
+  "inline suppression " + directive.shown + " is not allowed; fix the code, or name an exception in weeds.toml"
+}
+
+let anySuppression: String! = suppressionDirectives.map { d => d.pattern }.join("|")
+
+let suppressionHits(source: Directory!, files: [String!]!): [Finding!]! {
+  let found: [Finding!]! = []
+  files.each { path =>
+    let text = source.file(path).contents
+    if (text.containsMatch(`${anySuppression}`)) {
+      text.split("\n").each { row, index =>
+        if (row.containsMatch(`${anySuppression}`)) {
+          suppressionDirectives.each { directive =>
+            if (row.containsMatch(`${directive.pattern}`)) {
+              found += [Finding(path: path, line: index + 1, rule: directive.rule, message: suppressionMessage(directive))]
+            }
+          }
+        }
+      }
+    }
+  }
+  found
+}

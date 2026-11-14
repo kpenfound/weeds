@@ -1,0 +1,54 @@
+let suppressionsRules: [String!]! = suppressionDirectives.map { d => d.rule }
+
+let markdownRules: [String!]! = [markdownRule]
+
+let commentsRules: [String!]! = ["go-comment-todo", "go-comment-main", "go-comment-internal", "go-comment-code", "go-comment-not-doc", "go-comment-detached", "ts-comment-todo", "ts-comment-internal", "ts-comment-code", "ts-comment-not-doc", "ts-comment-detached"]
+
+let goLintRules: [String!]! = goLintLinters
+
+let installedSkillsRules: [String!]! = [skillAdded, skillModified, skillRemoved, skillConflict]
+
+let checkRules: Map[[String!]!]! = [
+  "comments": commentsRules
+  "suppressions": suppressionsRules
+  "markdown": markdownRules
+  "go-lint": goLintRules
+  "installed-skills": installedSkillsRules
+]
+
+let baselineLinters: [String!]! = complexityLinters
+
+let defaultSkills: [String!]! = [
+  "no-comments"
+  "lint-discipline"
+  "simple-code"
+  "typescript-best-practices"
+  "unslop"
+  "no-deltas"
+  "behavioral-testing"
+]
+
+let skillsDirectories: [String!]! = [
+  ".agents/skills"
+  ".claude/skills"
+  ".cursor/skills"
+  ".gemini/skills"
+  ".github/skills"
+  ".opencode/skills"
+]
+
+let staleRules: [String!]! = ["stale-exception", "stale-allowlist", "stale-baseline"]
+
+let knownChecks: [String!]! = checkRules.keys
+
+let knownRules: [String!]! = checkRules.reduce([] :: [String!]!) { all, check, rules => all + rules }
+
+let ruleCheck(rule: String!): String {
+  let owner: String = null
+  checkRules.each { check, rules =>
+    if (rules.contains(rule)) {
+      owner = check
+    }
+  }
+  owner
+}

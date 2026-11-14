@@ -1,0 +1,4 @@
+[[exceptions]]
+check = "markdown"
+paths = ["legacy/**"]
+reason = "legacy notes are being deleted"

@@ -1,0 +1,31 @@
+id: ts-comment-todo
+valid:
+  - |
+    /** Starts the work. */
+    export function run() {}
+  - |
+    // todo in lower case is an ordinary word
+    function run() {}
+  - |
+    // TODOS is not the marker
+    function run() {}
+invalid:
+  - |
+    // TODO: handle the error
+    function run() {}
+  - |
+    /** FIXME: slow */
+    export function run() {}
+  - |
+    /*
+     * Starts the work.
+     * TODO: faster
+     */
+    export function run() {}
+  - |
+    function run() {
+      // FIXME later
+    }
+  - |
+    /// <reference path="x.d.ts" /> TODO
+    export const a = 1;

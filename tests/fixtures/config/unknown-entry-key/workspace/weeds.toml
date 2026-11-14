@@ -1,0 +1,4 @@
+[[exceptions]]
+check = "markdown"
+glob = "docs/**"
+paths = ["docs/**"]

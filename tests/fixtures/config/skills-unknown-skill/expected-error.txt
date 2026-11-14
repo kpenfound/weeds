@@ -1,0 +1,3 @@
+weeds.toml is invalid:
+skills.subset: unknown skill "no-excuses"
+known skills: no-comments, lint-discipline

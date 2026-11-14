@@ -1,0 +1,2 @@
+weeds.toml is invalid:
+markdown.allowlist must be an array of strings

@@ -1,0 +1,122 @@
+id: ts-comment-code
+snapshots:
+  ? |
+    // await run();
+    export const a = 1;
+  : labels:
+    - source: // await run();
+      style: primary
+      start: 0
+      end: 15
+  ? |
+    // class Old {
+    export const a = 1;
+  : labels:
+    - source: // class Old {
+      style: primary
+      start: 0
+      end: 14
+  ? |
+    // console.log("debug");
+    export const a = 1;
+  : labels:
+    - source: // console.log("debug");
+      style: primary
+      start: 0
+      end: 24
+  ? |
+    // const x = compute();
+    export const a = 1;
+  : labels:
+    - source: // const x = compute();
+      style: primary
+      start: 0
+      end: 23
+  ? |
+    // const { a, b } = props;
+    export const a = 1;
+  : labels:
+    - source: // const { a, b } = props;
+      style: primary
+      start: 0
+      end: 26
+  ? |
+    // export const b = 2;
+    export const a = 1;
+  : labels:
+    - source: // export const b = 2;
+      style: primary
+      start: 0
+      end: 22
+  ? |
+    // function old() {
+    export const a = 1;
+  : labels:
+    - source: // function old() {
+      style: primary
+      start: 0
+      end: 19
+  ? |
+    // if (ready) {
+    export const a = 1;
+  : labels:
+    - source: // if (ready) {
+      style: primary
+      start: 0
+      end: 15
+  ? |
+    // import { a } from "./a";
+    export const a = 1;
+  : labels:
+    - source: // import { a } from "./a";
+      style: primary
+      start: 0
+      end: 27
+  ? |
+    // let x = 1
+    export const a = 1;
+  : labels:
+    - source: // let x = 1
+      style: primary
+      start: 0
+      end: 12
+  ? |
+    // return x;
+    export const a = 1;
+  : labels:
+    - source: // return x;
+      style: primary
+      start: 0
+      end: 12
+  ? |
+    // throw new Error("x");
+    export const a = 1;
+  : labels:
+    - source: // throw new Error("x");
+      style: primary
+      start: 0
+      end: 24
+  ? |
+    // type T = { a: number };
+    export const a = 1;
+  : labels:
+    - source: '// type T = { a: number };'
+      style: primary
+      start: 0
+      end: 26
+  ? |
+    // x = 2;
+    export const a = 1;
+  : labels:
+    - source: // x = 2;
+      style: primary
+      start: 0
+      end: 9
+  ? |
+    // }
+    export const a = 1;
+  : labels:
+    - source: // }
+      style: primary
+      start: 0
+      end: 4

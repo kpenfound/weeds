@@ -1,0 +1,3 @@
+weeds.toml is invalid:
+markdown: unknown key "allow"
+known keys: allowlist

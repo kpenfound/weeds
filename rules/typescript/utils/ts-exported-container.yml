@@ -1,0 +1,11 @@
+id: ts-exported-container
+language: TypeScript
+rule:
+  any:
+    - kind: class_declaration
+    - kind: abstract_class_declaration
+    - kind: class
+    - kind: interface_declaration
+    - kind: enum_declaration
+  inside:
+    kind: export_statement

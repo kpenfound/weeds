@@ -1,0 +1,6 @@
+exceptions: 2
+- check "suppressions" paths tests/fixtures/**, docs/quote.md (line 1)
+- check "comments" paths generated/** (line 6)
+markdown allowlist: notes/design.md
+go-lint baseline: 0
+skills: no-deltas, behavioral-testing

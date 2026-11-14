@@ -1,0 +1,76 @@
+let astGrepVersion = "0.39.5"
+
+let astGrepBaseImage = "python:3.13.18-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90"
+
+let tsxFileGlobs = "\nlanguageGlobs:\n  tsx:\n    - \"*.js\"\n    - \"*.jsx\"\n    - \"*.mjs\"\n    - \"*.cjs\"\n"
+
+let scanArguments: [String!]! = ["ast-grep", "scan", "--config", "/pack/sgconfig.yml", "--json=compact", "--no-ignore", "hidden", "--no-ignore", "dot", "--no-ignore", "vcs", "--no-ignore", "exclude", "--no-ignore", "global", "--no-ignore", "parent", "."]
+
+let tsxExtensions: [String!]! = [".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+
+let neutraliseIgnores = "grep -rlZ --include='*.go' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.mjs' --include='*.cjs' --include='*.cts' --include='*.mts' ast-grep-ignore . | xargs -0 -r sed -i 's/ast-grep-ignore/ast_grep_ignore/g'"
+
+let astGrepTool: Container! {
+  container
+    .from(astGrepBaseImage)
+    .withExec(["pip", "install", "--no-cache-dir", "--disable-pip-version-check", "ast-grep-cli==" + astGrepVersion])
+}
+
+let rulePackSource(name: String!): Directory! {
+  currentModule.source.directory("rules/" + name)
+}
+
+let tsxRulePack(typescript: Directory!): Directory! {
+  let pack = typescript
+  ["rules", "utils"].each { folder =>
+    typescript.entries(path: folder).each { entry =>
+      let file = folder + "/" + entry.trimSuffix("/")
+      pack = pack.withNewFile(file, typescript.file(file).contents.replace("language: TypeScript", "language: Tsx"))
+    }
+  }
+  pack.withNewFile("sgconfig.yml", typescript.file("sgconfig.yml").contents + tsxFileGlobs)
+}
+
+let hasTsxExtension(path: String!): Boolean! {
+  tsxExtensions.any { ext => path.hasSuffix(ext) }
+}
+
+let scanWithPack(scanDir: Directory!, pack: Directory!): [SgMatch!]! {
+  let ran = astGrepTool
+    .withDirectory("/pack", pack)
+    .withDirectory("/work", scanDir)
+    .withWorkdir("/work")
+    .withExec(["sh", "-c", neutraliseIgnores])
+    .withExec(scanArguments, redirectStderr: "/stderr.txt")
+  let complaints = ran.file("/stderr.txt").contents
+  if (complaints.trimSpace != "") {
+    raise "comments: ast-grep reported errors:\n" + complaints
+  }
+  (JSON.decode(ran.stdout) :: [SgMatch!]!).map { m =>
+    SgMatch(file: m.file.trimPrefix("./"), ruleId: m.ruleId, range: m.range)
+  }
+}
+
+let scanComments(source: Directory!): [SgMatch!]! {
+  let owned = findOwnedFolders(source)
+  let files = walkFiles(source)
+  let scanDir = scanRoot(source, owned)
+  let found: [SgMatch!]! = []
+  if (files.any { f => f.hasSuffix(".go") }) {
+    found += scanWithPack(scanDir, rulePackSource("go")).filter { m => m.file.hasSuffix(".go") }
+  }
+  if (files.any { f => f.hasSuffix(".ts") }) {
+    found += scanWithPack(scanDir, rulePackSource("typescript")).filter { m => m.file.hasSuffix(".ts") }
+  }
+  if (files.any { f => hasTsxExtension(f) }) {
+    found += scanWithPack(scanDir, tsxRulePack(rulePackSource("typescript"))).filter { m => hasTsxExtension(m.file) }
+  }
+  found.filter { m => checkCommentRule(m.ruleId) and !commentIgnoredRules.contains(m.ruleId) }
+}
+
+let commentsFor(source: Directory!): [Finding!]! {
+  let found = scanComments(source)
+  commentFilesOf(found).reduce([] :: [Finding!]!) { all, path =>
+    all + commentFindings(path, source.file(path).contents, found.filter { m => m.file == path })
+  }
+}

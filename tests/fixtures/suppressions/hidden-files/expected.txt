@@ -1,0 +1,2 @@
+.github/scripts/check.sh:3: eslint-disable: inline suppression eslint-disable is not allowed; fix the code, or name an exception in weeds.toml
+.hidden.py:2: noqa: inline suppression # noqa is not allowed; fix the code, or name an exception in weeds.toml
