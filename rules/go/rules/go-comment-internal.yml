@@ -1,0 +1,11 @@
+id: go-comment-internal
+language: Go
+severity: hint
+message: comment under internal/
+files:
+  - "**/internal/**/*.go"
+  - "internal/**/*.go"
+rule:
+  kind: comment
+  not:
+    matches: go-directive

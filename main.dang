@@ -135,6 +135,76 @@ type Weeds {
     null
   }
 
+  """
+  The comments check's findings after weeds.toml exceptions, rendered one per
+  line (empty when there are none). The check itself fails with this text.
+  """
+  pub commentsReport: String! {
+    renderFindings(applyExceptions("comments", commentsFor(source), settings))
+  }
+
+  """
+  Comment policy for Go and TS/JS: only adjacent doc comments on exported
+  identifiers, tool directives, licence headers and generated files.
+  """
+  pub comments: Void @check {
+    verdict("comments", commentsFor(source))
+  }
+
+  """
+  The pinned ast-grep CLI container the comments check and its rule tests run.
+  """
+  pub astGrep: Container! {
+    astGrepTool
+  }
+
+  """
+  Weeds' Go comment rule pack, with its rule tests.
+  """
+  pub goRules: Directory! {
+    rulePackSource("go")
+  }
+
+  """
+  Weeds' TypeScript comment rule pack, with its rule tests.
+  """
+  pub typescriptRules: Directory! {
+    rulePackSource("typescript")
+  }
+
+  """
+  The TSX pack as the check derives it from the TypeScript pack at run time.
+  """
+  pub tsxRules: Directory! {
+    tsxRulePack(rulePackSource("typescript"))
+  }
+
+  """
+  Classify the ast-grep matches (a JSON array) for one file's text exactly as
+  the comments check does, without running ast-grep. Fails on a rule id that
+  is not registered.
+  """
+  pub classifyComments(path: String!, text: String!, matches: String!): String! {
+    let found = JSON.decode(matches) :: [SgMatch!]!
+    found.each { m => checkCommentRule(m.ruleId) }
+    renderFindings(commentFindings(path, text, found.filter { m => !commentIgnoredRules.contains(m.ruleId) }))
+  }
+
+  """
+  Every rule id a comment scan may report: registered rules and the doc
+  candidate markers the check consumes.
+  """
+  pub commentScanRules: [String!]! {
+    commentsRules + commentMarkerRules
+  }
+
+  """
+  The comment rule ids registered for weeds.toml exceptions.
+  """
+  pub registeredCommentRules: [String!]! {
+    commentsRules
+  }
+
   let verdict(check: String!, found: [Finding!]!): Void {
     let remaining = applyExceptions(check, found, settings)
     if (!remaining.isEmpty) {

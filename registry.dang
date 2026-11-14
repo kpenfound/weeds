@@ -2,7 +2,7 @@ let suppressionsRules: [String!]! = suppressionDirectives.map { d => d.rule }
 
 let markdownRules: [String!]! = [markdownRule]
 
-let commentsRules: [String!]! = []
+let commentsRules: [String!]! = ["go-comment-todo", "go-comment-main", "go-comment-internal", "go-comment-code", "go-comment-not-doc", "go-comment-detached", "ts-comment-todo", "ts-comment-internal", "ts-comment-code", "ts-comment-not-doc", "ts-comment-detached"]
 
 let goLintRules: [String!]! = []
 

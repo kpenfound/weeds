@@ -1,0 +1,142 @@
+id: go-comment-not-doc
+valid:
+  - |
+    // Package p does things.
+    package p
+
+    // Run starts the work.
+    func Run() {}
+  - |
+    package p
+
+    // Run starts the work.
+    //
+    //go:noinline
+    func Run() {}
+  - |
+    package p
+
+    //go:build linux
+    var hidden = 1
+  - |
+    package p
+
+    // T is a type.
+    type T struct {
+    	// A is a field.
+    	A int
+    }
+  - |
+    package p
+
+    type (
+    	// X is a type.
+    	X int
+    )
+  - |
+    package p
+
+    const (
+    	// C is a constant.
+    	C = 1
+    )
+  - |
+    package p
+
+    // V holds values.
+    var (
+    	v = 1
+    	W = 2
+    )
+  - |
+    package p
+
+    // I is an interface.
+    type I interface {
+    	// M does it.
+    	M()
+    }
+  - |
+    package p
+
+    // Do runs the method.
+    func (t T) Do() {}
+  - |
+    package p
+
+    // a does nothing.
+    //line a.go:10
+    func A() {}
+invalid:
+  - |
+    package p
+
+    // run starts the work.
+    func run() {}
+  - |
+    package p
+
+    func Run() {
+    	// body
+    	x := 1
+    	_ = x
+    }
+  - |
+    package p
+
+    var f = func() {
+    	// closure
+    }
+  - |
+    package p
+
+    func Run() {
+    	// Local is declared in a function.
+    	type Local struct {
+    		// Field is exported.
+    		Field int
+    	}
+    }
+  - |
+    package p
+
+    // stray comment at the end
+  - |
+    package p
+
+    type T struct {
+    	// b is unexported.
+    	b int
+    }
+  - |
+    package p
+
+    const (
+    	// c is unexported.
+    	c = 1
+    )
+  - |
+    package p
+
+    // not a directive, no colon
+    //gox:thing
+    func a() {}
+  - |
+    package p
+
+    // T is exported.
+    type T struct {
+    	c int // trailing is judged elsewhere
+    }
+  - |
+    package p
+
+    type i interface {
+    	// M is a method of an unexported interface.
+    	M()
+    }
+  - |
+    package p
+
+    /* header */
+    import "fmt"

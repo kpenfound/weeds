@@ -1,0 +1,9 @@
+id: go-in-function
+language: Go
+rule:
+  inside:
+    any:
+      - kind: function_declaration
+      - kind: method_declaration
+      - kind: func_literal
+    stopBy: end

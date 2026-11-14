@@ -1,0 +1,27 @@
+id: go-comment-internal
+valid:
+  - |
+    //go:build linux
+
+    package p
+  - |
+    package p
+
+    func Run() {}
+invalid:
+  - |
+    package p
+
+    // Run starts the work.
+    func Run() {}
+  - |
+    package p
+
+    func run() {
+    	// body
+    }
+  - |
+    package main
+
+    // main starts the program.
+    func main() {}

@@ -1,0 +1,11 @@
+id: go-exported-spec
+language: Go
+rule:
+  any:
+    - kind: type_spec
+    - kind: type_alias
+    - kind: var_spec
+    - kind: const_spec
+  has:
+    field: name
+    matches: go-exported-name

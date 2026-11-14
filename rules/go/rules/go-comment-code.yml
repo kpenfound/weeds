@@ -1,0 +1,23 @@
+id: go-comment-code
+language: Go
+severity: hint
+message: commented-out code
+rule:
+  all:
+    - kind: comment
+    - not:
+        matches: go-directive
+    - not:
+        matches: go-in-function
+    - any:
+        - regex: '^// ?(func|if|for|switch|select|else|defer|go)\b.*\{\s*$'
+        - regex: '^// ?(var|const)\s+\w+(\s+[\w.*\[\]]+)?\s*=\s*\S'
+        - regex: '^// ?type\s+\w+\s+(struct|interface)\s*\{?\s*$'
+        - regex: '^// ?[A-Za-z_]\w*(,\s*[A-Za-z_]\w*)*\s*:=\s*\S'
+        - regex: '^// ?[A-Za-z_]\w*(\.\w+)*\s*[-+*/|&]?=\s*[^\s=]\S*$'
+        - regex: '^// ?[A-Za-z_]\w*(\.\w+)*\s*[-+*/|&]?=\s*\S*[(\[{"`]'
+        - regex: '^// ?[A-Za-z_][\w.]*\(.*\)\s*$'
+        - regex: '^// ?return(\s+(\S+,\s+)*\S+)?\s*$'
+        - regex: '^// ?[})\]]+[,;]?\s*$'
+        - regex: '^// ?(import\s+["(]|package\s+\w+\s*$)'
+        - regex: '^// ?\S.*[(=].*;\s*$'

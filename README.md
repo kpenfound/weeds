@@ -81,6 +81,41 @@ hide in an ignored file. The skips apply to the walk only. The installer and
 `installed-skills` read the whole workspace, including owned skill folders,
 their markers and any hand edit inside them.
 
+### Comments
+
+`comments` runs a pinned ast-grep (0.39.5) in a container with the Weeds rule
+packs in `rules/go` and `rules/typescript` and reads its `--json` output. The
+consumer's ast-grep configuration is never read, and ast-grep's own inline
+suppression comment is neutralised in the scanned copy, so that comment is
+reported like any other. `.go` uses the Go grammar, `.ts` the TypeScript
+grammar, and `.tsx`, `.js`, `.jsx`, `.mjs` and `.cjs` the TSX grammar (the TSX
+pack is derived from the TypeScript pack at run time).
+
+Allowed: a doc comment directly above an exported identifier in an importable
+package (Go: any comment, including the package comment and fields or methods
+of exported types; TS/JS: a `/** */` block above an `export`, a CommonJS
+`module.exports`/`exports.x` assignment, or a public member of an exported
+class, interface or enum); tool directives (Go: `//go:`, `// +build`, `//line`;
+TS/JS: triple-slash references, `@ts-check`, `@jsx*`, `@flow` and source-map
+comments); generated files; and a licence header, the leading comment block
+that has a licence or copyright line. Everything else is reported:
+
+| Rule | Reports |
+|---|---|
+| `go-comment-todo`, `ts-comment-todo` | `TODO` or `FIXME` anywhere. |
+| `go-comment-main` | Any comment in `package main`. |
+| `go-comment-internal`, `ts-comment-internal` | Any comment under `internal/`. |
+| `go-comment-code`, `ts-comment-code` | A `//` comment that looks like code, outside function bodies. |
+| `go-comment-not-doc`, `ts-comment-not-doc` | Comments in function bodies, on unexported code, or otherwise not an adjacent doc comment. |
+| `go-comment-detached`, `ts-comment-detached` | A trailing comment, or a doc comment separated from its declaration by a blank line. |
+
+Where forms overlap, in order: a generated file gets no findings; `TODO` and
+`FIXME` are always reported, even in a licence header or an exported doc
+comment; a directive or licence header is allowed anywhere (function bodies,
+unexported code, `internal/`, `main`); a directive line between a doc comment
+and its declaration does not detach it; any other comment must be an adjacent
+doc comment on an exported identifier.
+
 ## weeds.toml
 
 `weeds.toml` sits at the repository root. A missing file means defaults: no

@@ -1,0 +1,17 @@
+id: go-comment-not-doc
+language: Go
+severity: hint
+message: comment is not a doc comment on an exported identifier
+rule:
+  all:
+    - kind: comment
+    - not:
+        matches: go-directive
+    - any:
+        - matches: go-in-function
+        - not:
+            precedes:
+              stopBy:
+                not:
+                  kind: comment
+              matches: go-doc-target

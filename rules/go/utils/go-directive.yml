@@ -1,0 +1,9 @@
+id: go-directive
+language: Go
+rule:
+  kind: comment
+  any:
+    - regex: '^//go:[a-z]'
+    - regex: '^//\s?\+build\b'
+    - regex: '^//line [^ ]*:[0-9]+'
+    - regex: '^/\*line [^ ]*:[0-9]+'

@@ -1,0 +1,9 @@
+lib/lib.go:6: go-comment-detached: trailing comment
+lib/lib.go:8: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+lib/lib.go:9: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note
+lib/lib.go:13: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+lib/lib.go:14: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/ignore.ts:4: ts-comment-detached: trailing comment
+src/ignore.ts:6: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/ignore.ts:7: ts-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note
+src/ignore.ts:11: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier

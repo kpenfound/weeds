@@ -1,0 +1,15 @@
+id: ts-doc-target
+language: TypeScript
+rule:
+  any:
+    - kind: export_statement
+    - matches: ts-public-member
+    - kind: expression_statement
+      has:
+        kind: assignment_expression
+        has:
+          field: left
+          kind: member_expression
+          any:
+            - regex: '^module\.exports\b'
+            - regex: '^exports\.'

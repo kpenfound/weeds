@@ -1,0 +1,15 @@
+src/header.ts:1: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/internal/secret.ts:1: ts-comment-internal: comment under internal/
+src/lib.ts:1: ts-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note
+src/lib.ts:6: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/lib.ts:11: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/lib.ts:14: ts-comment-code: commented-out code
+src/lib.ts:15: ts-comment-code: commented-out code
+src/lib.ts:18: ts-comment-detached: trailing comment
+src/lib.ts:20: ts-comment-detached: doc comment is separated from its declaration by a blank line
+src/lib.ts:24: ts-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note
+src/lib.ts:30: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/lib.ts:32: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/lib.ts:34: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/lib.ts:38: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+src/lib.ts:42: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier

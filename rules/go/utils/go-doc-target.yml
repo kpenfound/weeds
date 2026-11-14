@@ -1,0 +1,37 @@
+id: go-doc-target
+language: Go
+rule:
+  any:
+    - kind: package_clause
+    - matches: go-exported-spec
+    - all:
+        - any:
+            - kind: function_declaration
+            - kind: method_declaration
+        - has:
+            field: name
+            matches: go-exported-name
+    - all:
+        - any:
+            - kind: type_declaration
+            - kind: const_declaration
+            - kind: var_declaration
+        - has:
+            any:
+              - matches: go-exported-spec
+              - kind: var_spec_list
+                has:
+                  matches: go-exported-spec
+    - all:
+        - any:
+            - kind: field_declaration
+            - kind: method_elem
+        - has:
+            field: name
+            matches: go-exported-name
+        - inside:
+            kind: type_spec
+            stopBy: end
+            has:
+              field: name
+              matches: go-exported-name

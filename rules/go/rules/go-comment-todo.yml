@@ -1,0 +1,7 @@
+id: go-comment-todo
+language: Go
+severity: hint
+message: TODO or FIXME comment
+rule:
+  kind: comment
+  regex: '\b(TODO|FIXME)\b'

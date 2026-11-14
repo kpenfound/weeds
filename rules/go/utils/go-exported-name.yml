@@ -1,0 +1,4 @@
+id: go-exported-name
+language: Go
+rule:
+  regex: '^[A-Z]'

@@ -1,0 +1,101 @@
+id: ts-doc-candidate
+valid:
+  - |
+    /** Hidden. */
+    function hidden() {}
+  - |
+    // Plain comments are not doc comments.
+    export function run() {}
+  - |
+    export function run() {
+      /** Inside a function. */
+      const x = 1;
+    }
+  - |
+    /// <reference path="x.d.ts" />
+    export const a = 1;
+  - |
+    export class Foo {
+      /** Private. */
+      private b = 1;
+      /** Protected. */
+      protected c = 2;
+      /** Hash private. */
+      #d = 3;
+    }
+  - |
+    class Hidden {
+      /** Member of an unexported class. */
+      a = 1;
+    }
+  - |
+    /** Last in the file. */
+invalid:
+  - |
+    /** Starts the work. */
+    export function run() {}
+  - |
+    /** The default. */
+    export default function run() {}
+  - |
+    /** Constants. */
+    export const a = 1, b = 2;
+  - |
+    /** The class. */
+    export class Foo {}
+  - |
+    /** The re-export. */
+    export { a as b };
+  - |
+    /** The CommonJS export. */
+    module.exports = { a: 1 };
+  - |
+    /** The CommonJS member. */
+    exports.a = 1;
+  - |
+    /** The CommonJS member. */
+    module.exports.a = 1;
+  - |
+    export class Foo {
+      /** A field. */
+      a = 1;
+    }
+  - |
+    export class Foo {
+      /** A method. */
+      m(): void {}
+    }
+  - |
+    export class Foo {
+      /** The constructor. */
+      constructor(public e: number) {}
+    }
+  - |
+    export abstract class Foo {
+      /** An abstract method. */
+      abstract m(): void;
+    }
+  - |
+    export interface I {
+      /** A member. */
+      x: number;
+    }
+  - |
+    export interface I {
+      /** A method. */
+      m(): void;
+    }
+  - |
+    export enum E {
+      /** A member. */
+      A,
+    }
+  - |
+    export enum E {
+      /** A member. */
+      A = 1,
+    }
+  - |
+    /** The doc. */
+    // @ts-check
+    export const a = 1;

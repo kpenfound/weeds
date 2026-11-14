@@ -1,0 +1,122 @@
+id: go-comment-code
+snapshots:
+  ? |
+    package p
+
+    // doSomething(x);
+    var y = 1
+  : labels:
+    - source: // doSomething(x);
+      style: primary
+      start: 11
+      end: 29
+  ? |
+    package p
+
+    // fmt.Println("debug")
+    var y = 1
+  : labels:
+    - source: // fmt.Println("debug")
+      style: primary
+      start: 11
+      end: 34
+  ? |
+    package p
+
+    // for i := 0; i < 3; i++ {
+    var y = 1
+  : labels:
+    - source: // for i := 0; i < 3; i++ {
+      style: primary
+      start: 11
+      end: 38
+  ? |
+    package p
+
+    // func old() {
+    func New() {}
+  : labels:
+    - source: // func old() {
+      style: primary
+      start: 11
+      end: 26
+  ? |
+    package p
+
+    // if err != nil {
+    var x = 1
+  : labels:
+    - source: // if err != nil {
+      style: primary
+      start: 11
+      end: 29
+  ? |
+    package p
+
+    // import "fmt"
+    var y = 1
+  : labels:
+    - source: // import "fmt"
+      style: primary
+      start: 11
+      end: 26
+  ? |
+    package p
+
+    // return err
+    var y = 1
+  : labels:
+    - source: // return err
+      style: primary
+      start: 11
+      end: 24
+  ? |
+    package p
+
+    // type T struct {
+    var y = 1
+  : labels:
+    - source: // type T struct {
+      style: primary
+      start: 11
+      end: 29
+  ? |
+    package p
+
+    // var cache = map[string]int{}
+    var y = 1
+  : labels:
+    - source: // var cache = map[string]int{}
+      style: primary
+      start: 11
+      end: 42
+  ? |
+    package p
+
+    // x := compute()
+    var y = 1
+  : labels:
+    - source: // x := compute()
+      style: primary
+      start: 11
+      end: 28
+  ? |
+    package p
+
+    // y = 2
+    var y = 1
+  : labels:
+    - source: // y = 2
+      style: primary
+      start: 11
+      end: 19
+  ? |
+    package p
+
+    // }
+    var y = 1
+  : labels:
+    - source: // }
+      style: primary
+      start: 11
+      end: 15

@@ -1,0 +1,35 @@
+id: ts-comment-internal
+snapshots:
+  ? |
+    /** Starts the work. */
+    export function run() {}
+  : labels:
+    - source: /** Starts the work. */
+      style: primary
+      start: 0
+      end: 23
+  ? |
+    // @ts-ignore
+    const a: number = "x";
+  : labels:
+    - source: // @ts-ignore
+      style: primary
+      start: 0
+      end: 13
+  ? |
+    // plain comment
+    const a = 1;
+  : labels:
+    - source: // plain comment
+      style: primary
+      start: 0
+      end: 16
+  ? |
+    function run() {
+      // body
+    }
+  : labels:
+    - source: // body
+      style: primary
+      start: 19
+      end: 26

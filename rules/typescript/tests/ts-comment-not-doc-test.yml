@@ -1,0 +1,101 @@
+id: ts-comment-not-doc
+valid:
+  - |
+    /// <reference path="x.d.ts" />
+    // @ts-check
+    /** Starts the work. */
+    export function run() {}
+  - |
+    // @jsx h
+    /** @jsxImportSource preact */
+    export const a = 1;
+  - |
+    // @flow
+    export const a = 1;
+  - |
+    export const a = 1;
+    //# sourceMappingURL=a.js.map
+  - |
+    export const a = <T>(x: T) => <T>x;
+  - |
+    /** A CommonJS export. */
+    module.exports = { a: 1 };
+  - |
+    /** A class. */
+    export class Foo {
+      /** A field. */
+      a = 1;
+      /** A method. */
+      m(): void {}
+    }
+  - |
+    /** An interface. */
+    export interface I {
+      /** A member. */
+      x: number;
+    }
+  - |
+    /** An enum. */
+    export enum E {
+      /** A member. */
+      A,
+    }
+  - |
+    /** The doc. */
+    /// <reference path="x.d.ts" />
+    export const a = 1;
+invalid:
+  - |
+    /** Hidden. */
+    function hidden() {}
+  - |
+    // Plain comments are not doc comments.
+    export function run() {}
+  - |
+    export function run() {
+      // body
+      const x = 1;
+    }
+  - |
+    export function run() {
+      /** JSDoc inside a function. */
+      const x = 1;
+    }
+  - |
+    export const a = () => {
+      // body
+    };
+  - |
+    export class Foo {
+      m(): void {
+        // body
+      }
+    }
+  - |
+    export class Foo {
+      /** Private. */
+      private b = 1;
+    }
+  - |
+    export class Foo {
+      /** Protected. */
+      protected c = 2;
+    }
+  - |
+    export class Foo {
+      /** Hash private. */
+      #d = 3;
+    }
+  - |
+    class Hidden {
+      /** Member of an unexported class. */
+      a = 1;
+    }
+  - |
+    /** Last in the file. */
+  - |
+    // ts-ignore is not a tool directive here
+    // @ts-nocheck
+    export const a = 1;
+  - |
+    export const a = 1; // trailing

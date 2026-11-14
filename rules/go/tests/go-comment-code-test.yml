@@ -1,0 +1,101 @@
+id: go-comment-code
+valid:
+  - |
+    package p
+
+    // Run starts the work.
+    func Run() {}
+  - |
+    package p
+
+    // Run returns the value, if there is one.
+    //
+    //	x := New()
+    //	x.Run()
+    func Run() {}
+  - |
+    package p
+
+    // return the value to the caller
+    // for each item we build a list
+    // if there is no match we stop
+    func Run() {}
+  - |
+    package p
+
+    func Run() {
+    	// x := 1
+    	// return x
+    }
+  - |
+    package p
+
+    // ratio = a measure of how full the buffer is, not an assignment
+    // Compare a == b before use
+    func Run() {}
+  - |
+    package p
+
+    //go:generate go run gen.go
+    func Run() {}
+invalid:
+  - |
+    package p
+
+    // func old() {
+    func New() {}
+  - |
+    package p
+
+    // if err != nil {
+    var x = 1
+  - |
+    package p
+
+    // x := compute()
+    var y = 1
+  - |
+    package p
+
+    // fmt.Println("debug")
+    var y = 1
+  - |
+    package p
+
+    // return err
+    var y = 1
+  - |
+    package p
+
+    // }
+    var y = 1
+  - |
+    package p
+
+    // var cache = map[string]int{}
+    var y = 1
+  - |
+    package p
+
+    // type T struct {
+    var y = 1
+  - |
+    package p
+
+    // y = 2
+    var y = 1
+  - |
+    package p
+
+    // import "fmt"
+    var y = 1
+  - |
+    package p
+
+    // doSomething(x);
+    var y = 1
+  - |
+    package p
+
+    // for i := 0; i < 3; i++ {
+    var y = 1

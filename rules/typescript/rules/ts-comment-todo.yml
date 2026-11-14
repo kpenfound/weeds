@@ -1,0 +1,7 @@
+id: ts-comment-todo
+language: TypeScript
+severity: hint
+message: TODO or FIXME comment
+rule:
+  kind: comment
+  regex: '\b(TODO|FIXME)\b'

@@ -1,0 +1,28 @@
+id: go-comment-internal
+snapshots:
+  ? |
+    package main
+
+    // main starts the program.
+    func main() {}
+  : labels:
+    - source: // main starts the program.
+      style: primary
+      start: 14
+      end: 41
+  ? |
+    package p
+
+    // Run starts the work.
+    func Run() {}
+  : labels:
+    - source: // Run starts the work.
+      style: primary
+      start: 11
+      end: 34
+  ? "package p\n\nfunc run() {\n\t// body\n}\n"
+  : labels:
+    - source: // body
+      style: primary
+      start: 25
+      end: 32

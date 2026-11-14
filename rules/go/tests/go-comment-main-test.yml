@@ -1,0 +1,37 @@
+id: go-comment-main
+valid:
+  - |
+    package p
+
+    // Run starts the work.
+    func Run() {}
+  - |
+    package main
+
+    //go:embed data.txt
+    var data string
+  - |
+    package main
+
+    func main() {}
+invalid:
+  - |
+    package main
+
+    // main starts the program.
+    func main() {}
+  - |
+    package main
+
+    func main() {
+    	// body
+    }
+  - |
+    package main
+
+    // Run is exported.
+    func Run() {}
+  - |
+    package main
+
+    var x = 1 // trailing

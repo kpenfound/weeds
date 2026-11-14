@@ -1,0 +1,96 @@
+id: go-comment-not-doc
+snapshots:
+  ? |
+    package p
+
+    /* header */
+    import "fmt"
+  : labels:
+    - source: /* header */
+      style: primary
+      start: 11
+      end: 23
+  ? "package p\n\n// T is exported.\ntype T struct {\n\tc int // trailing is judged elsewhere\n}\n"
+  : labels:
+    - source: // trailing is judged elsewhere
+      style: primary
+      start: 52
+      end: 83
+  ? |
+    package p
+
+    // not a directive, no colon
+    //gox:thing
+    func a() {}
+  : labels:
+    - source: // not a directive, no colon
+      style: primary
+      start: 11
+      end: 39
+  ? |
+    package p
+
+    // run starts the work.
+    func run() {}
+  : labels:
+    - source: // run starts the work.
+      style: primary
+      start: 11
+      end: 34
+  ? |
+    package p
+
+    // stray comment at the end
+  : labels:
+    - source: // stray comment at the end
+      style: primary
+      start: 11
+      end: 38
+  ? "package p\n\nconst (\n\t// c is unexported.\n\tc = 1\n)\n"
+  : labels:
+    - source: // c is unexported.
+      style: primary
+      start: 20
+      end: 39
+  ? "package p\n\nfunc Run() {\n\t// Local is declared in a function.\n\ttype Local struct {\n\t\t// Field is exported.\n\t\tField int\n\t}\n}\n"
+  : labels:
+    - source: // Local is declared in a function.
+      style: primary
+      start: 25
+      end: 60
+    - source: "func Run() {\n\t// Local is declared in a function.\n\ttype Local struct {\n\t\t// Field is exported.\n\t\tField int\n\t}\n}"
+      style: secondary
+      start: 11
+      end: 122
+  ? "package p\n\nfunc Run() {\n\t// body\n\tx := 1\n\t_ = x\n}\n"
+  : labels:
+    - source: // body
+      style: primary
+      start: 25
+      end: 32
+    - source: "func Run() {\n\t// body\n\tx := 1\n\t_ = x\n}"
+      style: secondary
+      start: 11
+      end: 49
+  ? "package p\n\ntype T struct {\n\t// b is unexported.\n\tb int\n}\n"
+  : labels:
+    - source: // b is unexported.
+      style: primary
+      start: 28
+      end: 47
+  ? "package p\n\ntype i interface {\n\t// M is a method of an unexported interface.\n\tM()\n}\n"
+  : labels:
+    - source: // M is a method of an unexported interface.
+      style: primary
+      start: 31
+      end: 75
+  ? "package p\n\nvar f = func() {\n\t// closure\n}\n"
+  : labels:
+    - source: // closure
+      style: primary
+      start: 29
+      end: 39
+    - source: "func() {\n\t// closure\n}"
+      style: secondary
+      start: 19
+      end: 41

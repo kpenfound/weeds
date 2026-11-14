@@ -1,0 +1,26 @@
+id: ts-comment-code
+language: TypeScript
+severity: hint
+message: commented-out code
+rule:
+  all:
+    - kind: comment
+    - not:
+        matches: ts-directive
+    - not:
+        matches: ts-in-function
+    - any:
+        - regex: '^// ?(const|let|var)\s+(\w+[^=]*|[{\[].*)=\s*\S'
+        - regex: '^// ?(function|class|interface|enum|namespace|if|for|while|switch|try|else|catch|finally|do)\b.*\{\s*$'
+        - regex: '^// ?(if|for|while|switch)\s*\(.*\)\s*\{?\s*$'
+        - regex: '^// ?(import|export)\b.*(\bfrom\s+[''"]|;\s*$|\{\s*$)'
+        - regex: '^// ?export\s+(default|const|let|var|function|class|interface|type|enum)\b'
+        - regex: '^// ?import\s+[''"{*]'
+        - regex: '^// ?[A-Za-z_$][\w$.\[\]]*\s*(=|\+=|-=|\*=|/=|\|\|=|\?\?=)\s*[^\s=]\S*;?$'
+        - regex: '^// ?[A-Za-z_$][\w$.\[\]]*\s*(=|\+=|-=|\*=|/=|\|\|=|\?\?=)\s*\S*[(\[{"''`]'
+        - regex: '^// ?(await\s+)?[A-Za-z_$][\w$.]*\(.*\);?\s*$'
+        - regex: '^// ?return(\s+(\S+,\s+)*\S+)?;?\s*$'
+        - regex: '^// ?throw\s+\S+'
+        - regex: '^// ?[})\]]+[,;]?\s*$'
+        - regex: '^// ?type\s+\w+(<.*>)?\s*='
+        - regex: '^// ?\S.*[(=].*;\s*$'

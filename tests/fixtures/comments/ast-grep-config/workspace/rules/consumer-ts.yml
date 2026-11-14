@@ -1,0 +1,6 @@
+id: consumer-ts
+language: TypeScript
+severity: error
+message: a consumer rule on every comment
+rule:
+  kind: comment
