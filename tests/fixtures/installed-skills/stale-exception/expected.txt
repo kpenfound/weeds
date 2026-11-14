@@ -1,0 +1,1 @@
+weeds.toml:4: stale-exception: exception for check "installed-skills" with paths .agents/skills/** matches no finding; remove it

@@ -1,0 +1,16 @@
++ .agents/skills/behavioral-testing/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/behavioral-testing/LICENSE MIT\n
++ .agents/skills/behavioral-testing/SKILL.md ---\nname: behavioral-testing\ndescription: Load when the behavioral-testing policy applies.\n---\n\nGuidance for behavioral-testing.\n
++ .agents/skills/lint-discipline/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/lint-discipline/SKILL.md ---\nname: lint-discipline\ndescription: Load when the lint-discipline policy applies.\n---\n\nGuidance for lint-discipline.\n
++ .agents/skills/no-comments/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/no-comments/SKILL.md ---\nname: no-comments\ndescription: Load when the no-comments policy applies.\n---\n\nGuidance for no-comments.\n
++ .agents/skills/no-comments/references/forms.md Allowed and banned forms.\n
++ .agents/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n
++ .agents/skills/simple-code/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/simple-code/SKILL.md ---\nname: simple-code\ndescription: Load when the simple-code policy applies.\n---\n\nGuidance for simple-code.\n
++ .agents/skills/typescript-best-practices/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/typescript-best-practices/SKILL.md ---\nname: typescript-best-practices\ndescription: Load when the typescript-best-practices policy applies.\n---\n\nGuidance for typescript-best-practices.\n
++ .agents/skills/unslop/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/unslop/SKILL.md ---\nname: 'unslop'\ndescription: Load when the unslop policy applies.\n---\n\nGuidance for unslop.\n

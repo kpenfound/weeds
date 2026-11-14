@@ -1,0 +1,2 @@
+the skill source is invalid:
+skill "unslop" has no SKILL.md

@@ -1,0 +1,2 @@
+aborted with no change
+.agents/skills/no-deltas

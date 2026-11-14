@@ -9,9 +9,20 @@ type Weeds {
   """
   pub source: Directory!
 
-  new(ws: Workspace!) {
+  let skillInput: Directory
+
+  """
+  ws is the consumer workspace. skillSource replaces the pinned kpenfound/skills
+  commit as the place skills are installed from; tests pass fixture trees.
+  """
+  new(ws: Workspace!, skillSource: Directory = null) {
     self.source = ws.directory("/")
+    self.skillInput = skillSource
     self
+  }
+
+  let skillTree: Directory! {
+    skillInput ?? fetchSkills()
   }
 
   let settings: Settings! {
@@ -247,6 +258,59 @@ type Weeds {
   """
   pub registeredCommentRules: [String!]! {
     commentsRules
+  }
+
+  """
+  Install the selected skills, from the pinned kpenfound/skills commit, into
+  every real skills directory among .agents/skills, .claude/skills,
+  .cursor/skills, .gemini/skills, .github/skills and .opencode/skills at the
+  repo root. With none, AGENTS.md creates .agents/skills and CLAUDE.md creates
+  .claude/skills; with neither, it fails. A symlink or file is never replaced
+  by a target. Each installed folder gets the Weeds ownership marker. A folder
+  to be written that exists without the marker aborts the run with no change.
+  Owned folders are replaced whole and owned folders of unselected skills are
+  removed. weeds.toml [skills] subset picks the skills; the default is all seven.
+  """
+  pub generate: Changeset! @generate {
+    let targets = skillTargets(source)
+    if (targets.isEmpty) {
+      raise "dagger generate has nowhere to install skills: create a skills directory such as .agents/skills or .claude/skills, or add AGENTS.md or CLAUDE.md"
+    }
+    checkSkillSource(skillTree, settings.skills)
+    installChanges(source, skillTree, targets, settings.skills)
+  }
+
+  let installedSkillsOutcome: [Finding!]! {
+    let targets = skillTargets(source)
+    let found: [Finding!]! = []
+    if (!targets.isEmpty) {
+      checkSkillSource(skillTree, settings.skills)
+      let conflicts = installConflicts(source, targets, settings.skills)
+      if (conflicts.isEmpty) {
+        found = changeFindings(installChanges(source, skillTree, targets, settings.skills))
+      } else {
+        found = conflictFindings(conflicts)
+      }
+    }
+    applyExceptions("installed-skills", found, settings)
+  }
+
+  """
+  The installed-skills check's findings after weeds.toml exceptions: one line
+  per path the generator would add, modify or remove, or "no findings".
+  """
+  pub installedSkillsReport: String! {
+    reportOf(installedSkillsOutcome)
+  }
+
+  """
+  The installed skill folders equal what dagger generate would write: one
+  finding per path it would add, modify or remove, and a finding naming each
+  folder that blocks it. With no skills directory and no AGENTS.md or
+  CLAUDE.md there is nothing to install and the check passes.
+  """
+  pub installedSkills: Void @check {
+    fail(installedSkillsOutcome)
   }
 
   let verdict(check: String!, found: [Finding!]!): Void {

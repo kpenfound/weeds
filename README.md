@@ -142,6 +142,32 @@ unexported code, `internal/`, `main`); a directive line between a doc comment
 and its declaration does not detach it; any other comment must be an adjacent
 doc comment on an exported identifier.
 
+### installed-skills and `dagger generate`
+
+`dagger generate` copies the selected skills, from the kpenfound/skills commit
+this module pins by full SHA, into each target. `installed-skills` runs the
+same code and fails when the installed folders differ from what the installer
+would write, with one finding per path: `skill-added` (the installer would add
+it), `skill-modified` (a hand edit), `skill-removed` (it would delete it), and
+`skill-conflict` (a folder the installer would write exists without the
+ownership marker, so `dagger generate` would abort; the finding names the
+folder).
+
+Targets are the real directories (not symlinks) among `.agents/skills`,
+`.claude/skills`, `.cursor/skills`, `.gemini/skills`, `.github/skills` and
+`.opencode/skills` at the repo root. With none, `AGENTS.md` creates
+`.agents/skills` and `CLAUDE.md` creates `.claude/skills`. With neither,
+`dagger generate` fails, and `installed-skills` passes with no findings because
+there is nothing to install. A symlink or file is never replaced by a target.
+
+Each installed folder gets the ownership marker (see below). If a folder to be
+written exists in any target without a valid marker, the whole run aborts with
+no change. Owned folders are replaced whole, and owned folders of skills that
+are no longer selected are removed. Every selected skill needs
+`<name>/SKILL.md` whose frontmatter `name` equals the folder name. The skill
+source is a module input (`skillSource`); tests pass fixture skill trees, so
+they need no network.
+
 ## weeds.toml
 
 `weeds.toml` sits at the repository root. A missing file means defaults: no
@@ -238,6 +264,11 @@ Fixture rules:
   renames it to `.gitignore` when the case runs.
 - Commit no symlinks. List them in a `symlinks.txt` beside `workspace`, one
   `link -> target` per line.
+- The `generate` suite prints the installer's changeset: `+ path body` for an
+  added file, `~ path body` for a modified one, `- path` for a removed one,
+  with newlines in bodies written `\n`. `installed-skills` cases print the
+  check's findings. `source.txt` names a skill tree under
+  `tests/fixtures/skill-sources` (default `full`).
 - Dagger finds modules only inside a git repository, so run `dagger check`
   from a git checkout.
 

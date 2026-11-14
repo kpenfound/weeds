@@ -14,3 +14,6 @@ reason = "the directive list, the docs, the rule tests, the comments check and t
 check = "go-lint"
 paths = ["tests/fixtures/**"]
 reason = "the go-lint fixtures hold Go modules with deliberate violations"
+
+[skills]
+subset = ["behavioral-testing", "no-deltas"]

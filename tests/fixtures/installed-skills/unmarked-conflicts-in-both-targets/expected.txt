@@ -1,0 +1,2 @@
+.agents/skills/unslop:1: skill-conflict: folder exists without the Weeds ownership marker, so dagger generate would abort; move or delete it
+.claude/skills/no-deltas:1: skill-conflict: folder exists without the Weeds ownership marker, so dagger generate would abort; move or delete it

@@ -6,7 +6,7 @@ let commentsRules: [String!]! = ["go-comment-todo", "go-comment-main", "go-comme
 
 let goLintRules: [String!]! = goLintLinters
 
-let installedSkillsRules: [String!]! = []
+let installedSkillsRules: [String!]! = [skillAdded, skillModified, skillRemoved, skillConflict]
 
 let checkRules: Map[[String!]!]! = [
   "comments": commentsRules

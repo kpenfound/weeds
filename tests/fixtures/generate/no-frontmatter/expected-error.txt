@@ -1,0 +1,1 @@
+skill "no-deltas": frontmatter name "" must equal the folder name

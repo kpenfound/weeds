@@ -1,0 +1,1 @@
+Allowed and banned forms.

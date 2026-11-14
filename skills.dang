@@ -1,0 +1,183 @@
+let skillsRepository = "https://github.com/kpenfound/skills"
+
+let skillsCommit = "2210631f5dfab54241980a94b1ff3b21460328df"
+
+let fetchSkills(): Directory! {
+  git(skillsRepository).commit(skillsCommit).tree
+}
+
+let skillFile = "SKILL.md"
+
+let skillAdded = "skill-added"
+
+let skillModified = "skill-modified"
+
+let skillRemoved = "skill-removed"
+
+let skillConflict = "skill-conflict"
+
+let fallbackAgents: [String!]! = [".agents", ".claude"]
+
+let instructionFile(agent: String!): String! {
+  if (agent == ".agents") {
+    "AGENTS.md"
+  } else {
+    "CLAUDE.md"
+  }
+}
+
+let skillTargets(source: Directory!): [String!]! {
+  let existing = skillsDirectories.filter { target =>
+    isRealDirectory(source, target.trimSuffix("/skills")) and isRealDirectory(source, target)
+  }
+  if (existing.isEmpty) {
+    fallbackAgents
+      .filter { agent =>
+        let free = !source.exists(agent, doNotFollowSymlinks: true)
+        source.exists(instructionFile(agent), expectedType: ExistsType.REGULAR_TYPE) and
+          (free or isRealDirectory(source, agent)) and
+          !source.exists(agent + "/skills", doNotFollowSymlinks: true)
+      }
+      .map { agent => agent + "/skills" }
+  } else {
+    existing
+  }
+}
+
+let frontmatterName(text: String!): String! {
+  let lines = text.split("\n").map { row => row.trimSuffix("\r") }
+  let name = ""
+  let inside = false
+  let closed = false
+  lines.each { row, index =>
+    if (index == 0) {
+      inside = row.trimSpace == "---"
+    } else if (inside and !closed) {
+      if (row.trimSpace == "---") {
+        closed = true
+      } else if (name == "" and row.hasPrefix("name:")) {
+        name = row.trimPrefix("name:").trimSpace.trimPrefix("\"").trimSuffix("\"").trimPrefix("'").trimSuffix("'").trimSpace
+      }
+    }
+  }
+  if (closed) {
+    name
+  } else {
+    ""
+  }
+}
+
+let skillProblems(tree: Directory!, names: [String!]!): [String!]! {
+  let problems: [String!]! = []
+  names.each { name =>
+    if (!isRealDirectory(tree, name)) {
+      problems += ["skill " + quoted(name) + " is missing from the skill source"]
+    } else if (!isRealFile(tree, name + "/" + skillFile)) {
+      problems += ["skill " + quoted(name) + " has no " + skillFile]
+    } else {
+      let declared = frontmatterName(tree.file(name + "/" + skillFile).contents)
+      if (declared != name) {
+        problems += ["skill " + quoted(name) + ": frontmatter name " + quoted(declared) + " must equal the folder name"]
+      }
+    }
+  }
+  problems
+}
+
+let checkSkillSource(tree: Directory!, names: [String!]!): Void {
+  let problems = skillProblems(tree, names)
+  if (!problems.isEmpty) {
+    raise "the skill source is invalid:\n- " + problems.join("\n- ")
+  }
+  null
+}
+
+let isOwnedFolder(source: Directory!, folder: String!): Boolean! {
+  isRealDirectory(source, folder) and isRealFile(source, folder + "/" + markerFile) and isOwnerMarker(source.file(folder + "/" + markerFile).contents)
+}
+
+let installConflicts(source: Directory!, targets: [String!]!, names: [String!]!): [String!]! {
+  let found: [String!]! = []
+  targets.each { target =>
+    names.each { name =>
+      let folder = target + "/" + name
+      if (source.exists(folder, doNotFollowSymlinks: true) and !isOwnedFolder(source, folder)) {
+        found += [folder]
+      }
+    }
+  }
+  sortStrings(found)
+}
+
+let unselectedFolders(source: Directory!, targets: [String!]!, names: [String!]!): [String!]! {
+  let found: [String!]! = []
+  targets.each { target =>
+    if (isRealDirectory(source, target)) {
+      source.entries(path: target).each { entry =>
+        let name = entry.trimSuffix("/")
+        let folder = target + "/" + name
+        if (!names.contains(name) and isOwnedFolder(source, folder)) {
+          found += [folder]
+        }
+      }
+    }
+  }
+  sortStrings(found)
+}
+
+let installedTree(source: Directory!, tree: Directory!, targets: [String!]!, names: [String!]!): Directory! {
+  let installed = targets.reduce(source) { output, target =>
+    names.reduce(output) { inner, name =>
+      let folder = target + "/" + name
+      inner
+        .withoutDirectory(folder)
+        .withDirectory(folder, tree.directory(name))
+        .withNewFile(folder + "/" + markerFile, markerContent)
+    }
+  }
+  unselectedFolders(source, targets, names).reduce(installed) { output, folder =>
+    output.withoutDirectory(folder)
+  }
+}
+
+let installChanges(source: Directory!, tree: Directory!, targets: [String!]!, names: [String!]!): Changeset! {
+  let conflicts = installConflicts(source, targets, names)
+  if (!conflicts.isEmpty) {
+    raise "dagger generate aborted with no change; these folders exist without the Weeds ownership marker, so move or delete them:\n- " + conflicts.join("\n- ")
+  }
+  installedTree(source, tree, targets, names).changes(source)
+}
+
+let conflictFindings(conflicts: [String!]!): [Finding!]! {
+  conflicts.map { folder =>
+    Finding(path: folder, line: 1, rule: skillConflict, message: "folder exists without the Weeds ownership marker, so dagger generate would abort; move or delete it")
+  }
+}
+
+let removedFiles(changes: Changeset!): [String!]! {
+  let files: [String!]! = []
+  changes.removedPaths.each { path =>
+    if (path.hasSuffix("/")) {
+      let folder = path.trimSuffix("/")
+      changes.before.directory(folder).glob("**/*").filter { inner => !inner.hasSuffix("/") }.each { inner =>
+        files += [folder + "/" + inner]
+      }
+    } else {
+      files += [path]
+    }
+  }
+  files
+}
+
+let changeFindings(changes: Changeset!): [Finding!]! {
+  let added = changes.addedPaths.filter { path => !path.hasSuffix("/") }.map { path =>
+    Finding(path: path, line: 1, rule: skillAdded, message: "missing; dagger generate would add it")
+  }
+  let modified = changes.modifiedPaths.filter { path => !path.hasSuffix("/") }.map { path =>
+    Finding(path: path, line: 1, rule: skillModified, message: "differs from the installer output; dagger generate would restore it")
+  }
+  let removed = removedFiles(changes).map { path =>
+    Finding(path: path, line: 1, rule: skillRemoved, message: "not part of the installer output; dagger generate would remove it")
+  }
+  added + modified + removed
+}

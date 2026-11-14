@@ -1,0 +1,1 @@
+Seven skills. Not installed.

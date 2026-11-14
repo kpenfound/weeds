@@ -1,0 +1,6 @@
+[skills]
+subset = ["no-deltas"]
+
+[[exceptions]]
+check = "installed-skills"
+paths = [".agents/skills/**"]

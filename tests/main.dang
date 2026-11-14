@@ -6,9 +6,11 @@ failure must contain; a leading ! marks a fragment it must not contain).
 """
 type WeedsTests {
   let fixtures: Directory!
+  let generatorSource: File!
 
   new(ws: Workspace!) {
     self.fixtures = ws.directory("/tests/fixtures")
+    self.generatorSource = ws.file("/skills.dang")
     self
   }
 
@@ -347,6 +349,59 @@ type WeedsTests {
   }
 
   """
+  The installer's golden changesets over fixture workspaces and fixture skill
+  trees: targets, ownership, replacement, removal and source validation.
+  """
+  pub generate: Void @check {
+    runSuite("generate")
+  }
+
+  """
+  The installed-skills check over fixture workspaces and fixture skill trees.
+  """
+  pub installedSkills: Void @check {
+    runSuite("installed-skills")
+  }
+
+  """
+  Through the real installed-skills check: it passes on generator output,
+  fails naming every path a hand edit changed in either target, passes with
+  nothing to install, and fails naming an unmarked folder. Also, the real
+  generator restores a hand-edited owned folder.
+  """
+  pub installedSkillsEntryPoint: Void @check {
+    let tree = installedWorkspace(directory.withNewFile("weeds.toml", "[skills]\nsubset = [\"no-deltas\", \"unslop\"]\n"), skillSource("full"))
+    let clean = weeds(ws: tree.asWorkspace, skillSource: skillSource("full"))
+    expect(checkResult(clean.installedSkills) == "passed", "the check must pass on generator output, got: " + checkResult(clean.installedSkills))
+    let edited = tree
+      .withNewFile(".claude/skills/no-deltas/SKILL.md", "hand edited\n")
+      .withNewFile(".agents/skills/unslop/extra.txt", "extra\n")
+      .withoutFile(".agents/skills/no-deltas/SKILL.md")
+    let broken = weeds(ws: edited.asWorkspace, skillSource: skillSource("full"))
+    let failure = checkResult(broken.installedSkills)
+    ["skill-modified", ".claude/skills/no-deltas/SKILL.md", "skill-removed", ".agents/skills/unslop/extra.txt", "skill-added", ".agents/skills/no-deltas/SKILL.md"].each { part =>
+      expect(failure.contains(part), "the check must report " + part + ", got: " + failure)
+    }
+    let restored = broken.generate.after
+    expect(restored.file(".claude/skills/no-deltas/SKILL.md").contents == skillSource("full").file("no-deltas/SKILL.md").contents, "generate must restore a hand-edited owned file")
+    expect(!restored.exists(".agents/skills/unslop/extra.txt"), "generate must remove an extra file from an owned folder")
+    expect(restored.exists(".agents/skills/no-deltas/SKILL.md"), "generate must restore a deleted file in an owned folder")
+    let afterGenerate = checkResult(weeds(ws: restored.asWorkspace, skillSource: skillSource("full")).installedSkills)
+    expect(afterGenerate == "passed", "the check must pass after generate, got: " + afterGenerate)
+
+    let nothing = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace, skillSource: skillSource("full"))
+    expect(checkResult(nothing.installedSkills) == "passed", "the check must pass with nothing to install")
+    expect(nothing.installedSkillsReport == "no findings", "nothing to install must report no findings")
+    let refused = { nothing.generate.addedPaths.join(","); "generated" } rescue { err: Error => err.message }
+    expect(refused.contains("nowhere to install skills"), "generate must fail where the check passes, got: " + refused)
+
+    let conflict = weeds(ws: directory.withNewFile("AGENTS.md", "x\n").withNewFile(".agents/skills/unslop/SKILL.md", "mine\n").asWorkspace, skillSource: skillSource("full"))
+    let conflictFailure = checkResult(conflict.installedSkills)
+    expect(conflictFailure.contains(".agents/skills/unslop") and conflictFailure.contains("skill-conflict"), "an unmarked folder must fail the check naming it, got: " + conflictFailure)
+    null
+  }
+
+  """
   A module that does not build cannot be linted: go-lint raises instead of
   passing. The broken module is built here so no committed fixture breaks the
   repository's own go-lint run.
@@ -359,6 +414,46 @@ type WeedsTests {
     expect(outcome.contains("go-lint: golangci-lint could not build module . (the workspace root)"), "a build failure must raise naming the module, got: " + outcome)
     expect(outcome.contains("undefined: missing"), "the build error must be shown, got: " + outcome)
     null
+  }
+
+  """
+  The skills pin is a full 40-character SHA and the installer holds no branch,
+  tag, latest or credential token. The validator is tested on in-memory text
+  first, then applied to skills.dang.
+  """
+  pub skillsPin: Void @check {
+    let sha = "2210631f5dfab54241980a94b1ff3b21460328df"
+    let good = "let skillsRepository = \"https://github.com/kpenfound/skills\"\n\nlet skillsCommit = \"" + sha + "\"\n\nlet fetchSkills(): Directory! {\n  git(skillsRepository).commit(skillsCommit).tree\n}\n"
+    expect(pinProblems(good).isEmpty, "a full SHA pin must pass, got: " + pinProblems(good).join("; "))
+    ["main", "v1.2.3", "latest", "2210631f5dfab54241980a94b1ff3b21460328d", sha + "0", "2210631F5DFAB54241980A94B1FF3B21460328DF", "2210631f5dfab54241980a94b1ff3b21460328dg", ""].each { bad =>
+      let problems = pinProblems(good.replace(sha, bad))
+      expect(problems.any { p => p.contains("40-character") }, "pin " + quoted(bad) + " must be rejected, got: " + problems.join("; "))
+    }
+    expect(!pinProblems("let skillsRepository = \"https://github.com/kpenfound/skills\"\n").isEmpty, "a missing pin line must be rejected")
+    expect(!pinProblems(good.replace("https://github.com/kpenfound/skills", "https://user@github.com/kpenfound/skills")).isEmpty, "a repository URL with user info must be rejected")
+    expect(!pinProblems(good.replace("https://github.com/kpenfound/skills", "https://github.com/other/skills")).isEmpty, "another repository must be rejected")
+    pinTokens.each { word =>
+      let problems = pinProblems(good + "let x = fetch" + word + "()\n")
+      expect(problems.any { p => p.contains(quoted(word)) }, "token " + quoted(word) + " must be rejected, got: " + problems.join("; "))
+    }
+    let real = pinProblems(generatorSource.contents)
+    expect(real.isEmpty, "skills.dang must pin a full SHA with no lookup or credential tokens:\n- " + real.join("\n- "))
+    null
+  }
+
+  let skillSource(name: String!): Directory! {
+    fixtures.directory("skill-sources/" + name)
+  }
+
+  let installedWorkspace(base: Directory!, tree: Directory!): Directory! {
+    let names = ["no-deltas", "unslop"]
+    [".agents/skills", ".claude/skills"].reduce(base) { dir, target =>
+      names.reduce(dir) { inner, name =>
+        inner
+          .withDirectory(target + "/" + name, tree.directory(name))
+          .withNewFile(target + "/" + name + "/.weeds-managed", "github.com/kpenfound/weeds\n")
+      }
+    }
   }
 
   let runSuite(suite: String!): Void {
@@ -414,7 +509,8 @@ type WeedsTests {
   }
 
   let reportFor(suite: String!, caseDir: Directory!, workspace: Directory!): String! {
-    let subject = weeds(ws: workspace.asWorkspace)
+    let source = if (caseDir.exists("source.txt")) { caseDir.file("source.txt").contents.trimSpace } else { "full" }
+    let subject = weeds(ws: workspace.asWorkspace, skillSource: skillSource(source))
     case (suite) {
       "config" => if (caseDir.exists("findings.txt")) {
         let lines = caseDir.file("findings.txt").contents.split("\n")
@@ -429,6 +525,15 @@ type WeedsTests {
       "markdown" => subject.markdownReport
       "comments" => subject.commentsReport
       "golint" => subject.goLintReport
+      "generate" => describeChanges(subject.generate)
+      "installed-skills" => {
+        let report = subject.installedSkillsReport
+        let passed = subject.installedSkills.pass
+        if (passed != (report == "no findings")) {
+          raise "the installed-skills check and its report disagree: check passed " + toString(passed) + ", report:\n" + report
+        }
+        report
+      }
       else => raise "no report is registered for suite " + suite
     }
   }

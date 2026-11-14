@@ -1,0 +1,4 @@
++ .agents/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n
++ .agents/skills/unslop/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/unslop/SKILL.md ---\nname: 'unslop'\ndescription: Load when the unslop policy applies.\n---\n\nGuidance for unslop.\n

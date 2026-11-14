@@ -1,0 +1,12 @@
++ .agents/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n
++ .claude/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .claude/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n
++ .cursor/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .cursor/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n
++ .gemini/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .gemini/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n
++ .github/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .github/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n
++ .opencode/skills/no-deltas/.weeds-managed github.com/kpenfound/weeds\n
++ .opencode/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n

@@ -1,0 +1,6 @@
++ .agents/skills/behavioral-testing/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/behavioral-testing/LICENSE MIT\n
++ .agents/skills/behavioral-testing/SKILL.md ---\nname: behavioral-testing\ndescription: Load when the behavioral-testing policy applies.\n---\n\nGuidance for behavioral-testing.\n
++ .agents/skills/no-comments/.weeds-managed github.com/kpenfound/weeds\n
++ .agents/skills/no-comments/SKILL.md ---\nname: no-comments\ndescription: Load when the no-comments policy applies.\n---\n\nGuidance for no-comments.\n
++ .agents/skills/no-comments/references/forms.md Allowed and banned forms.\n

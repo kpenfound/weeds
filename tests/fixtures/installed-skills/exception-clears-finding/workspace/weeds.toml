@@ -1,0 +1,6 @@
+[skills]
+subset = ["no-comments", "no-deltas", "unslop"]
+
+[[exceptions]]
+rule = "skill-removed"
+paths = [".agents/skills/no-deltas/notes.txt"]

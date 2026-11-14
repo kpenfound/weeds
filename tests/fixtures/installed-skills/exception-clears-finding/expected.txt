@@ -1,0 +1,2 @@
+.agents/skills/no-comments/references/forms.md:1: skill-added: missing; dagger generate would add it
+.agents/skills/no-deltas/SKILL.md:1: skill-modified: differs from the installer output; dagger generate would restore it

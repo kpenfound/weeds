@@ -1,0 +1,4 @@
+.claude/skills/no-deltas/.weeds-managed:1: skill-added: missing; dagger generate would add it
+.claude/skills/no-deltas/SKILL.md:1: skill-added: missing; dagger generate would add it
+.claude/skills/unslop/.weeds-managed:1: skill-added: missing; dagger generate would add it
+.claude/skills/unslop/SKILL.md:1: skill-added: missing; dagger generate would add it

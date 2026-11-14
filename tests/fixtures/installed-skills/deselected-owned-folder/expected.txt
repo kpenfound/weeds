@@ -1,0 +1,2 @@
+.agents/skills/no-comments/.weeds-managed:1: skill-removed: not part of the installer output; dagger generate would remove it
+.agents/skills/no-comments/SKILL.md:1: skill-removed: not part of the installer output; dagger generate would remove it
