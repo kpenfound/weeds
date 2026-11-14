@@ -1,0 +1,14 @@
+let regexSpecials = ["\\", ".", "+", "(", ")", "|", "[", "]", "{", "}", "^", "$"]
+
+let escapeRegexp(text: String!): String! {
+  text.split("").map { ch => if (regexSpecials.contains(ch)) { "\\" + ch } else { ch } }.join("")
+}
+
+let globPattern(glob: String!): String! {
+  let body = escapeRegexp(glob.trimPrefix("./").trimSuffix("/").replace("**/", "\x01").replace("**", "\x02").replace("*", "\x03").replace("?", "\x04"))
+  "^" + body.replace("\x01", "(?:.*/)?").replace("\x02", ".*").replace("\x03", "[^/]*").replace("\x04", "[^/]") + "(?:/.*)?$"
+}
+
+let pathMatches(glob: String!, path: String!): Boolean! {
+  path.containsMatch(`${globPattern(glob)}`)
+}

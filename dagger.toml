@@ -1,0 +1,7 @@
+[modules]
+
+[modules.weeds]
+source = "."
+
+[modules.weeds-tests]
+source = "tests"

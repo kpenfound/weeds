@@ -1,0 +1,2 @@
+check: suppressions
+tests/fixtures/deep/er/x.go:3: nolint: //nolint directive

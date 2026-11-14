@@ -1,0 +1,90 @@
+"""
+Weeds: lint-enforced "no excuses" code. The module holds the complete
+consumer workspace; the scanning checks walk it through walkFiles, which skips
+what the policy leaves out, while the installer reads the workspace in full.
+"""
+type Weeds {
+  """
+  The complete consumer workspace. Scan exclusions never apply to it.
+  """
+  pub source: Directory!
+
+  new(ws: Workspace!) {
+    self.source = ws.directory("/")
+    self
+  }
+
+  let settings: Settings! {
+    if (isRealFile(source, configFile)) {
+      parseSettings(source.file(configFile).contents)
+    } else {
+      Settings
+    }
+  }
+
+  """
+  Files the scanning checks read: every file except those under .git, vendor,
+  node_modules and Weeds-owned skill folders. Hidden and gitignored files are
+  included. Sorted.
+  """
+  pub scanFiles: [String!]! {
+    walkFiles(source)
+  }
+
+  """
+  Skill folders that carry a valid Weeds ownership marker, sorted.
+  """
+  pub ownedFolders: [String!]! {
+    findOwnedFolders(source)
+  }
+
+  """
+  The exact content of the Weeds ownership marker file.
+  """
+  pub ownerMarker: String! {
+    markerContent
+  }
+
+  """
+  The loaded weeds.toml (defaults when absent), one fact per line. Fails with a
+  message starting "weeds.toml is invalid:" when the file is invalid.
+  """
+  pub settingsReport: String! {
+    describeSettings(settings)
+  }
+
+  """
+  Whether a weeds.toml path glob matches a path.
+  """
+  pub globMatches(glob: String!, path: String!): Boolean! {
+    pathMatches(glob, path)
+  }
+
+  """
+  Parse finding lines, sort them and render them: the shared order and format.
+  """
+  pub sortedFindings(findings: String!): String! {
+    renderFindings(parseFindings(findings))
+  }
+
+  """
+  Run finding lines through the shared exception evaluator as if the named
+  check had reported them. Fails with the remaining findings, stale
+  exceptions included, exactly like a check; otherwise returns "no findings".
+  """
+  pub evaluateCheck(check: String!, findings: String!): String! {
+    if (!knownChecks.contains(check)) {
+      raise "unknown check " + quoted(check) + " (known checks: " + listOf(knownChecks) + ")"
+    }
+    verdict(check, parseFindings(findings))
+    "no findings"
+  }
+
+  let verdict(check: String!, found: [Finding!]!): Void {
+    let remaining = applyExceptions(check, found, settings)
+    if (!remaining.isEmpty) {
+      raise renderFindings(remaining)
+    }
+    null
+  }
+}

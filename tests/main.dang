@@ -1,0 +1,195 @@
+"""
+Fixture and harness tests for Weeds. A suite is a directory of cases under
+tests/fixtures; each case holds a workspace plus expected.txt (compared
+exactly after trimming) or expected-error.txt (one fragment per line that the
+failure must contain; a leading ! marks a fragment it must not contain).
+"""
+type WeedsTests {
+  let fixtures: Directory!
+
+  new(ws: Workspace!) {
+    self.fixtures = ws.directory("/tests/fixtures")
+    self
+  }
+
+  """
+  Config loading, validation and the shared exception evaluator.
+  """
+  pub config: Void @check {
+    runSuite("config")
+  }
+
+  """
+  The harness's own comparison behaviour, on in-memory cases.
+  """
+  pub harness: Void @check {
+    let exact = judge(Expectation(name: "exact", text: "a\nb"), Outcome(failed: false, text: "a\nb"))
+    expect(exact == "", "a matching output must pass, got: " + exact)
+
+    let trimmed = judge(Expectation(name: "trimmed", text: "a\nb\n"), Outcome(failed: false, text: "\na\nb"))
+    expect(trimmed == "", "surrounding whitespace must not matter, got: " + trimmed)
+
+    let mismatch = judge(Expectation(name: "deliberate-mismatch", text: "one"), Outcome(failed: false, text: "two"))
+    expect(mismatch.contains("FAIL deliberate-mismatch"), "a mismatch must fail naming the case, got: " + mismatch)
+    expect(mismatch.contains("one") and mismatch.contains("two"), "a mismatch must show both texts, got: " + mismatch)
+
+    let inner = judge(Expectation(name: "inner-space", text: "a  b"), Outcome(failed: false, text: "a b"))
+    expect(inner != "", "inner whitespace must be compared exactly")
+
+    let fragments = Expectation(name: "fragments", fragments: ["alpha", "beta", "!gamma"], wantsError: true)
+    expect(judge(fragments, Outcome(failed: true, text: "alpha and beta")) == "", "an error holding every fragment must pass")
+    let lacking = judge(fragments, Outcome(failed: true, text: "alpha only"))
+    expect(lacking.contains("beta") and lacking.contains("lacks"), "a missing fragment must be named, got: " + lacking)
+    let forbidden = judge(fragments, Outcome(failed: true, text: "alpha beta gamma"))
+    expect(forbidden.contains("forbidden") and forbidden.contains("!gamma"), "a forbidden fragment must fail, got: " + forbidden)
+
+    let unexpectedSuccess = judge(fragments, Outcome(failed: false, text: "fine"))
+    expect(unexpectedSuccess.contains("expected an error"), "success where an error is expected must fail, got: " + unexpectedSuccess)
+    let unexpectedError = judge(Expectation(name: "boom", text: "fine"), Outcome(failed: true, text: "kaboom"))
+    expect(unexpectedError.contains("expected output") and unexpectedError.contains("kaboom"), "an error where output is expected must fail, got: " + unexpectedError)
+
+    let all = summarize([exact, mismatch, lacking, trimmed, inner])
+    expect(all.contains("3 of 5 cases failed"), "failures must be counted together, got: " + all)
+    expect(all.contains("deliberate-mismatch") and all.contains("inner-space") and all.contains("fragments"), "every failure must be reported together, got: " + all)
+    expect(summarize([exact, trimmed]) == "", "no failures must give an empty summary")
+
+    expect(fragmentLines("  a  \n\n b\n") == ["a", "b"], "fragment lines must be trimmed and non-empty")
+    null
+  }
+
+  """
+  Findings render as path:line: rule: message in one deterministic order.
+  """
+  pub findings: Void @check {
+    let unsorted = "b.go:3: zeta: last\na.go:10: alpha: later line\na.go:9: beta: same line, second rule\na.go:9: alpha: same line, first rule\nb.go:3: zeta: first"
+    let expected = "a.go:9: alpha: same line, first rule\na.go:9: beta: same line, second rule\na.go:10: alpha: later line\nb.go:3: zeta: first\nb.go:3: zeta: last"
+    let shared = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
+    let once = shared.sortedFindings(unsorted)
+    expect(once == expected, "findings must sort by path, numeric line, rule, message; got:\n" + once)
+    expect(shared.sortedFindings(unsorted) == once, "sorting the same findings twice must give identical output")
+    expect(shared.sortedFindings(expected) == expected, "sorted findings must stay as they are")
+    let rejected = { shared.sortedFindings("not a finding"); "accepted" } rescue { err: Error => err.message }
+    expect(rejected.contains("not a finding line"), "a malformed line must be rejected, got: " + rejected)
+    null
+  }
+
+  """
+  weeds.toml path globs.
+  """
+  pub globs: Void @check {
+    let shared = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
+    expect(shared.globMatches("tests/fixtures/**", "tests/fixtures/a/b.txt"), "** must match any depth")
+    expect(shared.globMatches("tests/fixtures", "tests/fixtures/a/b.txt"), "a directory path must cover everything under it")
+    expect(shared.globMatches("**/x.go", "x.go") and shared.globMatches("**/x.go", "a/b/x.go"), "**/ must match zero or more directories")
+    expect(shared.globMatches("*.md", "b.md"), "* must match within a segment")
+    expect(!shared.globMatches("*.md", "a/b.md"), "* must not cross a slash")
+    expect(shared.globMatches("a?c", "abc") and !shared.globMatches("a?c", "a/c"), "? must match one non-slash character")
+    expect(!shared.globMatches("a.b", "aXb"), "a dot must be literal")
+    expect(!shared.globMatches("src", "srcs/a.go"), "a name must not match a longer sibling name")
+    null
+  }
+
+  """
+  The shared scanning walk skips .git, vendor, node_modules and Weeds-owned
+  skill folders, yields hidden and gitignored files, and leaves the module's
+  workspace whole.
+  """
+  pub walk: Void @check {
+    let marker = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).ownerMarker
+    let tree = directory
+      .withNewFile(".git/config", "git\n")
+      .withNewFile("vendor/pkg/a.go", "vendor\n")
+      .withNewFile("node_modules/m/index.js", "module\n")
+      .withNewFile("sub/node_modules/z.js", "nested module\n")
+      .withNewFile("sub/vendor/y.go", "nested vendor\n")
+      .withNewFile(".agents/skills/owned/SKILL.md", "skill\n")
+      .withNewFile(".agents/skills/owned/.weeds-managed", marker)
+      .withNewFile(".agents/skills/owned/refs/deep.md", "deep\n")
+      .withNewFile(".agents/skills/unmarked/SKILL.md", "unmarked\n")
+      .withNewFile(".claude/skills/imposter/SKILL.md", "imposter\n")
+      .withNewFile(".claude/skills/imposter/.weeds-managed", "someone else\n")
+      .withNewFile(".hidden/file.txt", "hidden\n")
+      .withNewFile(".gitignore", "ignored.log\n")
+      .withNewFile("ignored.log", "ignored\n")
+      .withNewFile("src/main.go", "package main\n")
+    let w = weeds(ws: tree.asWorkspace)
+    let walked = w.scanFiles.join("\n")
+    let expected = ".agents/skills/unmarked/SKILL.md\n.claude/skills/imposter/.weeds-managed\n.claude/skills/imposter/SKILL.md\n.gitignore\n.hidden/file.txt\nignored.log\nsrc/main.go"
+    expect(walked == expected, "the walk must skip .git, vendor, node_modules and owned skill folders only; got:\n" + walked)
+    expect(w.scanFiles.join("\n") == walked, "walking twice must give identical output")
+    expect(w.ownedFolders == [".agents/skills/owned"], "only a folder with a valid marker is owned, got: " + w.ownedFolders.join(", "))
+    expect(w.source.file(".agents/skills/owned/.weeds-managed").contents == marker, "the workspace must keep the owned marker")
+    expect(w.source.file(".agents/skills/owned/SKILL.md").contents == "skill\n", "the workspace must keep owned skill files")
+    expect(w.source.file(".agents/skills/owned/refs/deep.md").contents == "deep\n", "the workspace must keep owned nested files")
+    expect(w.source.exists(".git/config") and w.source.exists("vendor/pkg/a.go") and w.source.exists("node_modules/m/index.js"), "the workspace must keep .git, vendor and node_modules")
+    null
+  }
+
+  let runSuite(suite: String!): Void {
+    let names = fixtures.entries(path: suite).map { entry => entry.trimSuffix("/") }
+    if (names.isEmpty) {
+      raise "suite " + suite + " has no cases"
+    }
+    let message = summarize(names.map { name => runCase(suite, name) })
+    if (message != "") {
+      raise message
+    }
+    null
+  }
+
+  let runCase(suite: String!, name: String!): String! {
+    let label = suite + "/" + name
+    let caseDir = fixtures.directory(label)
+    let wantsOutput = caseDir.exists("expected.txt")
+    let wantsError = caseDir.exists("expected-error.txt")
+    if (wantsOutput == wantsError) {
+      return "FAIL " + label + ": a case needs exactly one of expected.txt and expected-error.txt"
+    }
+    let expectation = Expectation(
+      name: label
+      text: if (wantsOutput) { caseDir.file("expected.txt").contents } else { "" }
+      fragments: if (wantsError) { fragmentLines(caseDir.file("expected-error.txt").contents) } else { [] }
+      wantsError: wantsError
+    )
+    judge(expectation, attempt(suite, caseDir))
+  }
+
+  let attempt(suite: String!, caseDir: Directory!): Outcome! {
+    { Outcome(failed: false, text: reportFor(suite, caseDir, materialize(caseDir))) } rescue {
+      err: Error => Outcome(failed: true, text: err.message)
+    }
+  }
+
+  let materialize(caseDir: Directory!): Directory! {
+    let base = caseDir.directory("workspace")
+    let named = if (base.exists("gitignore.fixture")) {
+      base.withFile(".gitignore", base.file("gitignore.fixture")).withoutFile("gitignore.fixture")
+    } else {
+      base
+    }
+    if (caseDir.exists("symlinks.txt")) {
+      fragmentLines(caseDir.file("symlinks.txt").contents).reduce(named) { dir, row =>
+        let parts = row.split(" -> ")
+        dir.withSymlink(parts[1]!.trimSpace, parts[0]!.trimSpace)
+      }
+    } else {
+      named
+    }
+  }
+
+  let reportFor(suite: String!, caseDir: Directory!, workspace: Directory!): String! {
+    let subject = weeds(ws: workspace.asWorkspace)
+    case (suite) {
+      "config" => if (caseDir.exists("findings.txt")) {
+        let lines = caseDir.file("findings.txt").contents.split("\n")
+        if (!lines[0]!.hasPrefix("check:")) {
+          raise "findings.txt must start with a check: line"
+        }
+        subject.evaluateCheck(lines[0]!.trimPrefix("check:").trimSpace, lines.dropFirst(1).join("\n"))
+      } else {
+        subject.settingsReport
+      }
+      else => raise "no report is registered for suite " + suite
+    }
+  }
+}

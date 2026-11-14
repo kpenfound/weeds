@@ -1,0 +1,2 @@
+weeds.toml is invalid:
+exceptions[1] must name a check or a rule, not both

@@ -1,0 +1,4 @@
+[[exceptions]]
+check = "markdown"
+rule = "no-such-rule"
+paths = ["src/**"]

@@ -1,0 +1,3 @@
+[[exceptions]]
+check = "spellcheck"
+paths = ["docs/**"]

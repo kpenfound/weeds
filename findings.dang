@@ -1,0 +1,84 @@
+type Finding {
+  path: String!
+  line: Int!
+  rule: String!
+  message: String!
+
+  text: String! {
+    path + ":" + toString(line) + ": " + rule + ": " + message
+  }
+
+  before(other: Finding!): Boolean! {
+    if (path != other.path) {
+      path < other.path
+    } else if (line != other.line) {
+      line < other.line
+    } else if (rule != other.rule) {
+      rule < other.rule
+    } else {
+      message < other.message
+    }
+  }
+}
+
+let mergeFindings(left: [Finding!]!, right: [Finding!]!): [Finding!]! {
+  let out: [Finding!]! = []
+  let i = 0
+  let j = 0
+  loop {
+    if (i >= left.length and j >= right.length) {
+      break
+    }
+    if (j >= right.length or (i < left.length and !right[j]!.before(left[i]!))) {
+      out += [left[i]!]
+      i += 1
+    } else {
+      out += [right[j]!]
+      j += 1
+    }
+  }
+  out
+}
+
+let sortFindings(findings: [Finding!]!): [Finding!]! {
+  if (findings.length <= 1) {
+    findings
+  } else {
+    let middle = findings.length / 2
+    mergeFindings(sortFindings(findings.takeFirst(middle)), sortFindings(findings.dropFirst(middle)))
+  }
+}
+
+let renderFindings(findings: [Finding!]!): String! {
+  sortFindings(findings).map { f => f.text }.join("\n")
+}
+
+let digitValues: Map[Int!]! = [
+  "0": 0
+  "1": 1
+  "2": 2
+  "3": 3
+  "4": 4
+  "5": 5
+  "6": 6
+  "7": 7
+  "8": 8
+  "9": 9
+]
+
+let parseInt(text: String!): Int! {
+  text.split("").reduce(0) { total, ch => total * 10 + digitValues[ch]! }
+}
+
+let parseFinding(text: String!): Finding! {
+  let m = text.match(`^(?P<path>.+?):(?P<line>[0-9]+): (?P<rule>[^: ]+): (?P<message>.*)$`)
+  if (m == null) {
+    raise "not a finding line (want path:line: rule: message): " + text
+  }
+  let parts = m!.named
+  Finding(path: parts["path"]!, line: parseInt(parts["line"]!), rule: parts["rule"]!, message: parts["message"]!)
+}
+
+let parseFindings(text: String!): [Finding!]! {
+  text.split("\n").filter { l => l.trimSpace != "" }.map { l => parseFinding(l) }
+}

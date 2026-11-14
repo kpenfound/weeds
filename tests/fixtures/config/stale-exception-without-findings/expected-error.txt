@@ -1,0 +1,2 @@
+weeds.toml:1: stale-exception:
+!src/

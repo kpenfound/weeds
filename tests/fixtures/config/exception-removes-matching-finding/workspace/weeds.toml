@@ -1,0 +1,4 @@
+[[exceptions]]
+check = "suppressions"
+paths = ["tests/fixtures/**"]
+reason = "fixtures hold real directives"

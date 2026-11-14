@@ -1,0 +1,62 @@
+type Expectation {
+  name: String!
+  text: String! = ""
+  fragments: [String!]! = []
+  wantsError: Boolean! = false
+}
+
+type Outcome {
+  failed: Boolean!
+  text: String!
+}
+
+let fragmentLines(text: String!): [String!]! {
+  text.split("\n").map { row => row.trimSpace }.filter { row => row != "" }
+}
+
+let missingFragments(fragments: [String!]!, text: String!): [String!]! {
+  fragments.filter { f => !f.hasPrefix("!") and !text.contains(f) }
+}
+
+let forbiddenFragments(fragments: [String!]!, text: String!): [String!]! {
+  fragments.filter { f => f.hasPrefix("!") and text.contains(f.trimPrefix("!")) }
+}
+
+let judge(expectation: Expectation!, outcome: Outcome!): String! {
+  let head = "FAIL " + expectation.name + ": "
+  if (expectation.wantsError and !outcome.failed) {
+    head + "expected an error but the case succeeded with:\n" + outcome.text
+  } else if (expectation.wantsError) {
+    let missing = missingFragments(expectation.fragments, outcome.text)
+    let forbidden = forbiddenFragments(expectation.fragments, outcome.text)
+    if (!missing.isEmpty) {
+      head + "error lacks expected fragment(s):\n  " + missing.join("\n  ") + "\nactual error:\n" + outcome.text
+    } else if (!forbidden.isEmpty) {
+      head + "error holds forbidden fragment(s):\n  " + forbidden.join("\n  ") + "\nactual error:\n" + outcome.text
+    } else {
+      ""
+    }
+  } else if (outcome.failed) {
+    head + "expected output but got an error:\n" + outcome.text
+  } else if (outcome.text.trimSpace != expectation.text.trimSpace) {
+    head + "output differs\n--- expected\n" + expectation.text.trimSpace + "\n--- actual\n" + outcome.text.trimSpace
+  } else {
+    ""
+  }
+}
+
+let summarize(verdicts: [String!]!): String! {
+  let failures = verdicts.filter { verdict => verdict != "" }
+  if (failures.isEmpty) {
+    ""
+  } else {
+    toString(failures.length) + " of " + toString(verdicts.length) + " cases failed:\n\n" + failures.join("\n\n")
+  }
+}
+
+let expect(ok: Boolean!, message: String!): Void {
+  if (!ok) {
+    raise message
+  }
+  null
+}

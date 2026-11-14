@@ -1,0 +1,2 @@
+weeds.toml:1: stale-exception: exception for check "suppressions" with paths tests/fixtures/** matches no finding
+src/main.go:7: nolint: //nolint directive

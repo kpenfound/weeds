@@ -1,0 +1,4 @@
+weeds.toml:5: stale-exception:
+docs/old/**
+!weeds.toml:1:
+!tests/fixtures/a

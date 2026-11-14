@@ -1,0 +1,3 @@
+check: suppressions
+tests/fixtures/a/x.go:3: nolint: //nolint directive
+tests/fixtures/b/y.go:9: nolint: //nolint directive

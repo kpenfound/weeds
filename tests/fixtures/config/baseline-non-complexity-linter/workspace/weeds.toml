@@ -1,0 +1,3 @@
+[[go-lint.baseline]]
+linter = "errcheck"
+path = "internal/store/store.go"

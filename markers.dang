@@ -1,0 +1,7 @@
+let markerFile = ".weeds-managed"
+
+let markerContent = "github.com/kpenfound/weeds\n"
+
+let isOwnerMarker(content: String!): Boolean! {
+  content == markerContent
+}

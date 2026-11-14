@@ -1,0 +1,416 @@
+let configFile = "weeds.toml"
+
+let invalidPrefix = "weeds.toml is invalid:"
+
+type ConfigException {
+  check: String! = ""
+  rule: String! = ""
+  paths: [String!]! = []
+  reason: String! = ""
+  line: Int! = 1
+
+  name: String! {
+    if (check != "") {
+      "check \"" + check + "\""
+    } else {
+      "rule \"" + rule + "\""
+    }
+  }
+
+  appliesTo(scan: String!): Boolean! {
+    if (check != "") {
+      check == scan
+    } else {
+      ruleCheck(rule) == scan
+    }
+  }
+
+  matches(scan: String!, finding: Finding!): Boolean! {
+    appliesTo(scan) and (rule == "" or finding.rule == rule) and paths.any { glob => pathMatches(glob, finding.path) }
+  }
+}
+
+type BaselineEntry {
+  linter: String!
+  path: String!
+  symbol: String! = ""
+  reason: String! = ""
+  line: Int! = 1
+}
+
+type Settings {
+  exceptions: [ConfigException!]! = []
+  allowlist: [String!]! = []
+  allowlistLine: Int! = 1
+  baseline: [BaselineEntry!]! = []
+  skills: [String!]! = defaultSkills
+  text: String! = ""
+}
+
+let topKeys: [String!]! = ["exceptions", "markdown", "go-lint", "skills"]
+
+let exceptionKeys: [String!]! = ["check", "rule", "paths", "reason"]
+
+let markdownKeys: [String!]! = ["allowlist"]
+
+let goLintKeys: [String!]! = ["baseline"]
+
+let baselineKeys: [String!]! = ["linter", "path", "symbol", "reason"]
+
+let skillsKeys: [String!]! = ["subset"]
+
+let rowSep = "\x01"
+
+type TomlDoc {
+  let nodes: [String!]!
+  let links: [String!]!
+
+  nodeRow(path: String!): [String!]! {
+    let hits = nodes.filter { row => row.hasPrefix(path + rowSep) }
+    if (hits.isEmpty) {
+      []
+    } else {
+      hits[0]!.split(rowSep)
+    }
+  }
+
+  has(path: String!): Boolean! {
+    nodes.any { row => row.hasPrefix(path + rowSep) }
+  }
+
+  kindOf(path: String!): String! {
+    let row = nodeRow(path)
+    if (row.isEmpty) {
+      "missing"
+    } else {
+      row[1]!
+    }
+  }
+
+  textOf(path: String!): String! {
+    let row = nodeRow(path)
+    if (row.isEmpty) {
+      ""
+    } else {
+      row[2]!
+    }
+  }
+
+  keysOf(path: String!): [String!]! {
+    links.filter { row => row.hasPrefix(path + rowSep) }.map { row => row.trimPrefix(path + rowSep) }
+  }
+
+  childOf(path: String!, member: String!): String! {
+    if (kindOf(path) == "array") {
+      path + "[" + member + "]"
+    } else if (path == "") {
+      member
+    } else {
+      path + "." + member
+    }
+  }
+}
+
+let unescapeJson(text: String!): String! {
+  text.replace("\\u0026", "&").replace("\\u003c", "<").replace("\\u003e", ">").replace("\\/", "/").replace("\\n", "\n").replace("\\t", "\t").replace("\\\"", "\x01").replace("\\\\", "\\").replace("\x01", "\"")
+}
+
+let readDoc(json: String!): TomlDoc! {
+  let nodes: [String!]! = []
+  let links: [String!]! = []
+  let stackKinds: [String!]! = []
+  let stackPaths: [String!]! = []
+  let stackCounts: [Int!]! = []
+  let pendingKey = ""
+  let haveKey = false
+  json.matchAll(`"(?:[^"\\]|\\.)*"|[{}\[\]:,]|[^\s{}\[\]:,"]+`).each { m =>
+    let token = m.string
+    let depth = stackKinds.length
+    let inObject = depth > 0 and stackKinds[depth - 1]! == "object"
+    if (token == "}" or token == "]") {
+      stackKinds = stackKinds.dropLast
+      stackPaths = stackPaths.dropLast
+      stackCounts = stackCounts.dropLast
+    } else if (token != ":" and token != ",") {
+      if (inObject and !haveKey and token.hasPrefix("\"")) {
+        pendingKey = unescapeJson(token.trimPrefix("\"").trimSuffix("\""))
+        haveKey = true
+      } else {
+        let parent = if (depth == 0) { "" } else { stackPaths[depth - 1]! }
+        let name = if (depth == 0) { "" } else if (inObject) { pendingKey } else { toString(stackCounts[depth - 1]!) }
+        let path = if (depth == 0) {
+          ""
+        } else if (inObject) {
+          if (parent == "") { name } else { parent + "." + name }
+        } else {
+          parent + "[" + name + "]"
+        }
+        if (depth > 0) {
+          links += [parent + rowSep + name]
+          if (!inObject) {
+            stackCounts = stackCounts.dropLast + [stackCounts[depth - 1]! + 1]
+          }
+        }
+        haveKey = false
+        if (token == "{" or token == "[") {
+          let kind = if (token == "{") { "object" } else { "array" }
+          nodes += [path + rowSep + kind + rowSep]
+          stackKinds += [kind]
+          stackPaths += [path]
+          stackCounts += [0]
+        } else if (token.hasPrefix("\"")) {
+          nodes += [path + rowSep + "string" + rowSep + unescapeJson(token.trimPrefix("\"").trimSuffix("\""))]
+        } else {
+          nodes += [path + rowSep + "other" + rowSep + token]
+        }
+      }
+    }
+  }
+  TomlDoc(nodes: nodes, links: links)
+}
+
+let quoted(text: String!): String! {
+  "\"" + text + "\""
+}
+
+let listOf(items: [String!]!): String! {
+  if (items.isEmpty) {
+    "none"
+  } else {
+    items.join(", ")
+  }
+}
+
+let unknownKeyProblems(doc: TomlDoc!, path: String!, allowed: [String!]!, label: String!): [String!]! {
+  let prefix = if (label == "") { "" } else { label + ": " }
+  doc.keysOf(path).filter { key => !allowed.contains(key) }.map { key =>
+    prefix + "unknown key " + quoted(key) + " (known keys: " + listOf(allowed) + ")"
+  }
+}
+
+let stringProblem(doc: TomlDoc!, path: String!, label: String!): [String!]! {
+  if (doc.has(path) and doc.kindOf(path) != "string") {
+    [label + " must be a string"]
+  } else {
+    []
+  }
+}
+
+let stringsProblem(doc: TomlDoc!, path: String!, label: String!): [String!]! {
+  if (doc.kindOf(path) != "array") {
+    [label + " must be an array of strings"]
+  } else if (doc.keysOf(path).any { member => doc.kindOf(doc.childOf(path, member)) != "string" }) {
+    [label + " must be an array of strings"]
+  } else if (doc.keysOf(path).any { member => doc.textOf(doc.childOf(path, member)).trimSpace == "" }) {
+    [label + " must not hold an empty string"]
+  } else {
+    []
+  }
+}
+
+let stringsAt(doc: TomlDoc!, path: String!): [String!]! {
+  doc.keysOf(path).map { member => doc.textOf(doc.childOf(path, member)) }
+}
+
+let lineStarting(text: String!, prefix: String!, nth: Int!): Int! {
+  let seen = 0
+  let found = 0
+  text.split("\n").each { row, index =>
+    if (found == 0 and row.trimSpace.hasPrefix(prefix)) {
+      seen += 1
+      if (seen == nth) {
+        found = index + 1
+      }
+    }
+  }
+  found
+}
+
+let entryLine(text: String!, header: String!, key: String!, nth: Int!): Int! {
+  let byHeader = lineStarting(text, header, nth)
+  let byKey = lineStarting(text, key, 1)
+  if (byHeader > 0) {
+    byHeader
+  } else if (byKey > 0) {
+    byKey
+  } else {
+    1
+  }
+}
+
+let readException(doc: TomlDoc!, path: String!, label: String!, line: Int!): {{ item: ConfigException!, problems: [String!]! }}! {
+  if (doc.kindOf(path) != "object") {
+    return {{ item: ConfigException(line: line), problems: [label + " must be a table with check or rule and paths"] }}
+  }
+  let problems = unknownKeyProblems(doc, path, exceptionKeys, label)
+  problems += stringProblem(doc, path + ".check", label + ".check")
+  problems += stringProblem(doc, path + ".rule", label + ".rule")
+  problems += stringProblem(doc, path + ".reason", label + ".reason")
+  let check = doc.textOf(path + ".check")
+  let rule = doc.textOf(path + ".rule")
+  if (!doc.has(path + ".check") and !doc.has(path + ".rule")) {
+    problems += [label + " must name a check or a rule"]
+  }
+  if (doc.has(path + ".check") and doc.has(path + ".rule")) {
+    problems += [label + " must name a check or a rule, not both"]
+  }
+  if (doc.kindOf(path + ".check") == "string" and !knownChecks.contains(check)) {
+    problems += [label + ": unknown check " + quoted(check) + " (known checks: " + listOf(knownChecks) + ")"]
+  }
+  if (doc.kindOf(path + ".rule") == "string" and !knownRules.contains(rule)) {
+    problems += [label + ": unknown rule " + quoted(rule) + " (known rules: " + listOf(knownRules) + ")"]
+  }
+  if (!doc.has(path + ".paths")) {
+    problems += [label + ".paths is required"]
+  } else {
+    problems += stringsProblem(doc, path + ".paths", label + ".paths")
+    if (doc.kindOf(path + ".paths") == "array" and doc.keysOf(path + ".paths").isEmpty) {
+      problems += [label + ".paths must hold at least one path"]
+    }
+  }
+  {{
+    item: ConfigException(check: check, rule: rule, paths: stringsAt(doc, path + ".paths"), reason: doc.textOf(path + ".reason"), line: line)
+    problems: problems
+  }}
+}
+
+let readBaselineEntry(doc: TomlDoc!, path: String!, label: String!, line: Int!): {{ item: BaselineEntry!, problems: [String!]! }}! {
+  if (doc.kindOf(path) != "object") {
+    return {{ item: BaselineEntry(linter: "", path: "", line: line), problems: [label + " must be a table with linter and path"] }}
+  }
+  let problems = unknownKeyProblems(doc, path, baselineKeys, label)
+  problems += stringProblem(doc, path + ".symbol", label + ".symbol")
+  problems += stringProblem(doc, path + ".reason", label + ".reason")
+  let linter = doc.textOf(path + ".linter")
+  if (doc.kindOf(path + ".linter") != "string") {
+    problems += [label + ".linter is required and must be a string"]
+  } else if (!baselineLinters.contains(linter)) {
+    problems += [label + ": linter " + quoted(linter) + " cannot be baselined; only complexity linters can (baselineable linters: " + listOf(baselineLinters) + ")"]
+  }
+  if (doc.kindOf(path + ".path") != "string" or doc.textOf(path + ".path").trimSpace == "") {
+    problems += [label + ".path is required and must be a non-empty string"]
+  }
+  {{
+    item: BaselineEntry(linter: linter, path: doc.textOf(path + ".path"), symbol: doc.textOf(path + ".symbol"), reason: doc.textOf(path + ".reason"), line: line)
+    problems: problems
+  }}
+}
+
+let parseSettings(text: String!): Settings! {
+  let raw = TOML.decode(text) rescue { err: Error => raise invalidPrefix + "\n- not valid TOML: " + err.message }
+  let doc = readDoc(JSON.encode(raw))
+  let problems = unknownKeyProblems(doc, "", topKeys, "")
+
+  let exceptions: [ConfigException!]! = []
+  if (doc.has("exceptions")) {
+    if (doc.kindOf("exceptions") != "array") {
+      problems += ["exceptions must be an array of tables ([[exceptions]])"]
+    } else {
+      doc.keysOf("exceptions").each { member, index =>
+        let parsed = readException(doc, doc.childOf("exceptions", member), "exceptions[" + toString(index + 1) + "]", entryLine(text, "[[exceptions]]", "exceptions", index + 1))
+        exceptions += [parsed.item]
+        problems += parsed.problems
+      }
+    }
+  }
+
+  let allowlist: [String!]! = []
+  let allowlistLine = 1
+  if (doc.has("markdown")) {
+    if (doc.kindOf("markdown") != "object") {
+      problems += ["markdown must be a table ([markdown])"]
+    } else {
+      problems += unknownKeyProblems(doc, "markdown", markdownKeys, "markdown")
+      if (doc.has("markdown.allowlist")) {
+        allowlistLine = entryLine(text, "allowlist", "allowlist", 1)
+        let found = stringsProblem(doc, "markdown.allowlist", "markdown.allowlist")
+        problems += found
+        if (found.isEmpty) {
+          allowlist = stringsAt(doc, "markdown.allowlist")
+        }
+      }
+    }
+  }
+
+  let baseline: [BaselineEntry!]! = []
+  if (doc.has("go-lint")) {
+    if (doc.kindOf("go-lint") != "object") {
+      problems += ["go-lint must be a table ([go-lint])"]
+    } else {
+      problems += unknownKeyProblems(doc, "go-lint", goLintKeys, "go-lint")
+      if (doc.has("go-lint.baseline")) {
+        if (doc.kindOf("go-lint.baseline") != "array") {
+          problems += ["go-lint.baseline must be an array of tables ([[go-lint.baseline]])"]
+        } else {
+          doc.keysOf("go-lint.baseline").each { member, index =>
+            let parsed = readBaselineEntry(doc, doc.childOf("go-lint.baseline", member), "go-lint.baseline[" + toString(index + 1) + "]", entryLine(text, "[[go-lint.baseline]]", "baseline", index + 1))
+            baseline += [parsed.item]
+            problems += parsed.problems
+          }
+        }
+      }
+    }
+  }
+
+  let skills = defaultSkills
+  if (doc.has("skills")) {
+    if (doc.kindOf("skills") != "object") {
+      problems += ["skills must be a table ([skills])"]
+    } else {
+      problems += unknownKeyProblems(doc, "skills", skillsKeys, "skills")
+      if (doc.has("skills.subset")) {
+        let found = stringsProblem(doc, "skills.subset", "skills.subset")
+        problems += found
+        if (found.isEmpty) {
+          let listed = stringsAt(doc, "skills.subset")
+          if (listed.isEmpty) {
+            problems += ["skills.subset must not be empty (leave [skills] out to install all seven skills)"]
+          }
+          listed.each { name =>
+            if (!defaultSkills.contains(name)) {
+              problems += ["skills.subset: unknown skill " + quoted(name) + " (known skills: " + listOf(defaultSkills) + ")"]
+            }
+          }
+          if (listed.uniq.length != listed.length) {
+            problems += ["skills.subset must not repeat a skill"]
+          }
+          skills = listed
+        }
+      }
+    }
+  }
+
+  if (!problems.isEmpty) {
+    raise invalidPrefix + "\n- " + problems.join("\n- ")
+  }
+  Settings(exceptions: exceptions, allowlist: allowlist, allowlistLine: allowlistLine, baseline: baseline, skills: skills, text: text)
+}
+
+let describeSettings(settings: Settings!): String! {
+  let rows: [String!]! = []
+  rows += ["exceptions: " + toString(settings.exceptions.length)]
+  settings.exceptions.each { ex =>
+    rows += ["- " + ex.name + " paths " + listOf(ex.paths) + " (line " + toString(ex.line) + ")"]
+  }
+  rows += ["markdown allowlist: " + listOf(settings.allowlist)]
+  rows += ["go-lint baseline: " + toString(settings.baseline.length)]
+  settings.baseline.each { entry =>
+    rows += ["- " + entry.linter + " " + entry.path + (if (entry.symbol == "") { "" } else { " " + entry.symbol }) + " (line " + toString(entry.line) + ")"]
+  }
+  rows += ["skills: " + listOf(settings.skills)]
+  rows.join("\n")
+}
+
+let staleFinding(rule: String!, line: Int!, message: String!): Finding! {
+  Finding(path: configFile, line: line, rule: rule, message: message)
+}
+
+let applyExceptions(scan: String!, found: [Finding!]!, settings: Settings!): [Finding!]! {
+  let kept = found.filter { f => !settings.exceptions.any { ex => ex.matches(scan, f) } }
+  let stale = settings.exceptions
+    .filter { ex => ex.appliesTo(scan) and !found.any { f => ex.matches(scan, f) } }
+    .map { ex =>
+      staleFinding("stale-exception", ex.line, "exception for " + ex.name + " with paths " + listOf(ex.paths) + " matches no finding; remove it")
+    }
+  sortFindings(kept + stale)
+}

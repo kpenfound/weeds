@@ -1,0 +1,14 @@
+[[exceptions]]
+check = "suppressions"
+paths = ["tests/fixtures/**", "docs/quote.md"]
+reason = "fixtures quote directive names"
+
+[[exceptions]]
+check = "comments"
+paths = ["generated/**"]
+
+[markdown]
+allowlist = ["notes/design.md"]
+
+[skills]
+subset = ["no-deltas", "behavioral-testing"]

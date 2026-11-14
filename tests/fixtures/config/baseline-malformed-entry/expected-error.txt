@@ -1,0 +1,2 @@
+weeds.toml is invalid:
+go-lint.baseline[1] must be a table

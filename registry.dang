@@ -1,0 +1,54 @@
+let suppressionsRules: [String!]! = []
+
+let markdownRules: [String!]! = []
+
+let commentsRules: [String!]! = []
+
+let goLintRules: [String!]! = []
+
+let installedSkillsRules: [String!]! = []
+
+let checkRules: Map[[String!]!]! = [
+  "comments": commentsRules
+  "suppressions": suppressionsRules
+  "markdown": markdownRules
+  "go-lint": goLintRules
+  "installed-skills": installedSkillsRules
+]
+
+let baselineLinters: [String!]! = []
+
+let defaultSkills: [String!]! = [
+  "no-comments"
+  "lint-discipline"
+  "simple-code"
+  "typescript-best-practices"
+  "unslop"
+  "no-deltas"
+  "behavioral-testing"
+]
+
+let skillsDirectories: [String!]! = [
+  ".agents/skills"
+  ".claude/skills"
+  ".cursor/skills"
+  ".gemini/skills"
+  ".github/skills"
+  ".opencode/skills"
+]
+
+let staleRules: [String!]! = ["stale-exception", "stale-allowlist", "stale-baseline"]
+
+let knownChecks: [String!]! = checkRules.keys
+
+let knownRules: [String!]! = checkRules.reduce([] :: [String!]!) { all, check, rules => all + rules }
+
+let ruleCheck(rule: String!): String {
+  let owner: String = null
+  checkRules.each { check, rules =>
+    if (rules.contains(rule)) {
+      owner = check
+    }
+  }
+  owner
+}

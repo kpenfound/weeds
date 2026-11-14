@@ -1,0 +1,7 @@
+[[exceptions]]
+check = "suppressions"
+paths = ["tests/fixtures/**"]
+
+[[exceptions]]
+check = "suppressions"
+paths = ["docs/old/**"]
