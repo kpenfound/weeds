@@ -22,13 +22,27 @@ tag.
 source = "github.com/kpenfound/weeds@<full commit sha>"
 ```
 
-Run the checks with `dagger check`. Install the skills with `dagger generate`.
-Both fetch Weeds and the skills repo without credentials.
-
 Weeds pins its own tools the same way: ast-grep and golangci-lint by exact
 version (the golangci-lint image by tag and digest), and one kpenfound/skills
 commit by full SHA. A change to any of these pins is a breaking change and is
 called out in the commit message and release notes.
+
+## Install
+
+1. Add the module to your `dagger.toml` as shown above, pinned by full commit
+   SHA.
+2. Give the repository somewhere to install skills: an `AGENTS.md` (skills go
+   to `.agents/skills`), a `CLAUDE.md` (`.claude/skills`), or an existing
+   skills directory.
+3. Run `dagger generate` to install the skills and commit the result.
+4. Run `dagger check` to run the five checks. `installed-skills` fails when
+   the installed skill folders drift from what `dagger generate` writes.
+5. Optionally add a `weeds.toml` at the repository root (see below) to name
+   exceptions, a markdown allowlist, a go-lint baseline or a skills subset.
+
+Both commands fetch Weeds and the skills repo without credentials. To move to
+a newer Weeds, change the pinned SHA, run `dagger generate` and review the
+diff.
 
 ## Checks
 
@@ -269,6 +283,11 @@ Fixture rules:
   with newlines in bodies written `\n`. `installed-skills` cases print the
   check's findings. `source.txt` names a skill tree under
   `tests/fixtures/skill-sources` (default `full`).
+- The `consumer` suite is the end-to-end case: one workspace that uses every
+  `weeds.toml` section, run through all five checks and the installer. Its
+  case adds `hand-edits/` on top of the workspace as a hand-edited owned
+  skill folder, and its golden `expected.txt` holds one section per check plus
+  the generator's changeset.
 - Dagger finds modules only inside a git repository, so run `dagger check`
   from a git checkout.
 

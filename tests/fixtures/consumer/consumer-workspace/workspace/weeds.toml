@@ -1,0 +1,21 @@
+[[exceptions]]
+check = "suppressions"
+paths = ["scripts/**"]
+reason = "legacy scripts keep their noqa until they are rewritten"
+
+[[exceptions]]
+rule = "ts-comment-todo"
+paths = ["web/legacy/**"]
+reason = "the legacy module is removed next quarter"
+
+[markdown]
+allowlist = ["notes/design.md"]
+
+[[go-lint.baseline]]
+linter = "gocognit"
+path = "worker/sum.go"
+symbol = "Sum"
+reason = "split Sum before the next release"
+
+[skills]
+subset = ["no-deltas", "unslop"]

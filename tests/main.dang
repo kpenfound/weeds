@@ -402,6 +402,17 @@ type WeedsTests {
   }
 
   """
+  One consumer-like workspace that uses every weeds.toml section, through the
+  real entry points of all five checks and the installer: findings from each
+  check, an exception, an allowlisted markdown file, a baselined complexity
+  finding, a subset install, and a hand-edited owned skill folder that the
+  scans skip while installed-skills reports it and generate restores it.
+  """
+  pub consumer: Void @check {
+    runSuite("consumer")
+  }
+
+  """
   A module that does not build cannot be linted: go-lint raises instead of
   passing. The broken module is built here so no committed fixture breaks the
   repository's own go-lint run.
@@ -454,6 +465,41 @@ type WeedsTests {
           .withNewFile(target + "/" + name + "/.weeds-managed", "github.com/kpenfound/weeds\n")
       }
     }
+  }
+
+  let ownedFolders(base: Directory!, tree: Directory!, names: [String!]!): Directory! {
+    names.reduce(base) { dir, name =>
+      dir
+        .withDirectory(".agents/skills/" + name, tree.directory(name))
+        .withNewFile(".agents/skills/" + name + "/.weeds-managed", "github.com/kpenfound/weeds\n")
+    }
+  }
+
+  let consumerReport(caseDir: Directory!, workspace: Directory!): String! {
+    let source = skillSource("full")
+    let tree = ownedFolders(workspace, source, ["no-deltas", "unslop", "no-comments"])
+      .withDirectory(".agents/skills/no-deltas", caseDir.directory("hand-edits"))
+    let subject = weeds(ws: tree.asWorkspace, skillSource: source)
+    let scans = [
+      section("comments", checkResult(subject.comments))
+      section("suppressions", checkResult(subject.suppressions))
+      section("markdown", checkResult(subject.markdown))
+    ]
+    scans.each { scan =>
+      expect(!scan.contains(".agents/skills"), "the scans must skip the owned skill folder, got:\n" + scan)
+    }
+    let installed = section("installed-skills", checkResult(subject.installedSkills))
+    ["SKILL.md", "helper.ts", "extra.md"].each { name =>
+      expect(installed.contains(".agents/skills/no-deltas/" + name), "installed-skills must report the hand edit to " + name + ", got:\n" + installed)
+    }
+    let changes = subject.generate
+    let restored = weeds(ws: changes.after.asWorkspace, skillSource: source)
+    expect(restored.installedSkillsReport == "no findings", "generate must restore every owned folder, got:\n" + restored.installedSkillsReport)
+    (scans + [section("go-lint", checkResult(subject.goLint)), installed, section("generate", describeChanges(changes))]).join("\n\n")
+  }
+
+  let section(name: String!, body: String!): String! {
+    "== " + name + " ==\n" + body
   }
 
   let runSuite(suite: String!): Void {
@@ -526,6 +572,7 @@ type WeedsTests {
       "comments" => subject.commentsReport
       "golint" => subject.goLintReport
       "generate" => describeChanges(subject.generate)
+      "consumer" => consumerReport(caseDir, workspace)
       "installed-skills" => {
         let report = subject.installedSkillsReport
         let passed = subject.installedSkills.pass

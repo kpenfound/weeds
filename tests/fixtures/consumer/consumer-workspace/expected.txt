@@ -1,0 +1,28 @@
+== comments ==
+api/api.go:7: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+web/src/app.ts:2: ts-comment-not-doc: comment is not an adjacent doc comment on an exported identifier
+
+== suppressions ==
+web/src/app.ts:2: eslint-disable: inline suppression eslint-disable is not allowed; fix the code, or name an exception in weeds.toml
+
+== markdown ==
+notes/scratch.md:1: internal-markdown: internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist
+
+== go-lint ==
+api/api.go:8: errcheck: Error return value of `os.Remove` is not checked
+
+== installed-skills ==
+.agents/skills/no-comments/.weeds-managed:1: skill-removed: not part of the installer output; dagger generate would remove it
+.agents/skills/no-comments/SKILL.md:1: skill-removed: not part of the installer output; dagger generate would remove it
+.agents/skills/no-comments/references/forms.md:1: skill-removed: not part of the installer output; dagger generate would remove it
+.agents/skills/no-deltas/SKILL.md:1: skill-modified: differs from the installer output; dagger generate would restore it
+.agents/skills/no-deltas/extra.md:1: skill-removed: not part of the installer output; dagger generate would remove it
+.agents/skills/no-deltas/helper.ts:1: skill-removed: not part of the installer output; dagger generate would remove it
+
+== generate ==
+- .agents/skills/no-comments/.weeds-managed
+- .agents/skills/no-comments/SKILL.md
+- .agents/skills/no-comments/references/forms.md
+- .agents/skills/no-deltas/extra.md
+- .agents/skills/no-deltas/helper.ts
+~ .agents/skills/no-deltas/SKILL.md ---\nname: "no-deltas"\ndescription: Load when the no-deltas policy applies.\n---\n\nGuidance for no-deltas.\n

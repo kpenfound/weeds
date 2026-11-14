@@ -1,6 +1,6 @@
 let skillsRepository = "https://github.com/kpenfound/skills"
 
-let skillsCommit = "2210631f5dfab54241980a94b1ff3b21460328df"
+let skillsCommit = "295e8f78fe22a041b23674e96014c5d6e6778e02"
 
 let fetchSkills(): Directory! {
   git(skillsRepository).commit(skillsCommit).tree
