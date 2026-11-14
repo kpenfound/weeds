@@ -12,29 +12,13 @@ with static analysis only: no model, no classifier, no secret, and no consumer
 code leaving the machine. It also installs the matching agent skills from
 [kpenfound/skills](https://github.com/kpenfound/skills) with `dagger generate`.
 
-## Pinning
-
-Pin Weeds by full commit SHA in your `dagger.toml`. Never follow a branch or a
-tag.
-
-```toml
-[modules.weeds]
-source = "github.com/kpenfound/weeds@<full commit sha>"
-```
-
-Weeds pins its own tools the same way: ast-grep and golangci-lint by exact
-version (the golangci-lint image by tag and digest), and one kpenfound/skills
-commit by full SHA. A change to any of these pins is a breaking change and is
-called out in the commit message and release notes.
-
 ## Install
 
-1. Add the module to your `dagger.toml` as shown above, pinned by full commit
-   SHA.
+1. Run `dagger install github.com/kpenfound/weeds`
 2. Give the repository somewhere to install skills: an `AGENTS.md` (skills go
    to `.agents/skills`), a `CLAUDE.md` (`.claude/skills`), or an existing
    skills directory.
-3. Run `dagger generate` to install the skills and commit the result.
+3. Run `dagger generate -y` to install the skills and commit the result.
 4. Run `dagger check` to run the five checks. `installed-skills` fails when
    the installed skill folders drift from what `dagger generate` writes.
 5. Optionally add a `weeds.toml` at the repository root (see below) to name
