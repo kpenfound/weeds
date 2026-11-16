@@ -1,0 +1,238 @@
+type LintCase {
+  name: String!
+  module: String! = "."
+  status: Int! = 0
+  stdout: String!
+  stderr: String! = ""
+  want: String!
+}
+
+let lintRoot = ". (the workspace root)"
+
+let lintNested = "svc/api"
+
+let lintFailed(message: String!): String! {
+  "raised: " + message
+}
+
+let lintPlain(message: String!): String! {
+  message.replaceMatches(`\s\[traceparent:[0-9a-f-]+\]$`, "")
+}
+
+let lintLabel(module: String!): String! {
+  if (module == ".") { lintRoot } else { module }
+}
+
+let lintOutput(issues: [String!]!): String! {
+  "{\"Issues\":[" + issues.join(",") + "],\"Report\":{\"Linters\":[]}}\n"
+}
+
+let lintIssue(fields: [String!]!): String! {
+  "{" + fields.join(",") + "}"
+}
+
+let lintMember(key: String!, raw: String): [String!]! {
+  if (raw == null) {
+    []
+  } else {
+    ["\"" + key + "\":" + raw!]
+  }
+}
+
+let lintPos(file: String, line: String): [String!]! {
+  ["\"Pos\":{" + (lintMember("Filename", file) + lintMember("Line", line)).join(",") + "}"]
+}
+
+let lintIssueOf(linter: String, text: String, file: String, line: String): String! {
+  lintIssue(lintMember("FromLinter", linter) + lintMember("Text", text) + lintPos(file, line))
+}
+
+let lintGood(linter: String!, line: String!): String! {
+  lintIssueOf("\"" + linter + "\"", "\"msg\"", "\"/src/a.go\"", line)
+}
+
+let lintRowOf(linter: String!, line: Int!, message: String!): String! {
+  "a.go:" + toString(line) + ": " + linter + ": " + message
+}
+
+let lintIssueMessage(module: String!, index: Int!): String! {
+  "map function: go-lint: golangci-lint output for module " + lintLabel(module) + " has an issue without a linter, file or line: Issues[" + toString(index) + "]"
+}
+
+let lintBadIssue(name: String!, issue: String!): LintCase! {
+  LintCase(name: name, stdout: lintOutput([issue]), want: lintFailed(lintIssueMessage(".", 0)))
+}
+
+let lintOutside(module: String!, file: String!): String! {
+  "map function: go-lint: golangci-lint reported a file outside the workspace in module " + lintLabel(module) + ": " + file
+}
+
+let lintUnregistered(module: String!, linter: String!, where: String!): String! {
+  "map function: go-lint: golangci-lint reported an issue from linter \"" + linter + "\", which Weeds does not register (module " + lintLabel(module) + ", " + where + ")"
+}
+
+let lintBuild(module: String!, where: String!, text: String!): String! {
+  "map function: go-lint: golangci-lint could not build module " + lintLabel(module) + " (" + where + "): " + text
+}
+
+let lintNoIssues(module: String!): String! {
+  "go-lint: golangci-lint output for module " + lintLabel(module) + " has no Issues list"
+}
+
+let lintUnreadableIssues(module: String!): String! {
+  "go-lint: golangci-lint output for module " + lintLabel(module) + " has an unreadable Issues list"
+}
+
+let lintNotJson(module: String!, shown: String!): String! {
+  "go-lint: golangci-lint output for module " + lintLabel(module) + " is not readable JSON: " + shown
+}
+
+let lintExit(module: String!, status: Int!, stderr: String!, stdout: String!): String! {
+  "go-lint: golangci-lint exited with status " + toString(status) + " in module " + lintLabel(module) + ":\n" + stderr + "\n" + stdout
+}
+
+let lintWorkspaceSource = "package a\n\nfunc F() {}\n"
+
+let lintProcessCases: [LintCase!]! = [
+  LintCase(name: "non-zero status shows trimmed stderr then trimmed stdout", status: 3, stderr: "  compile exploded\n", stdout: " partial output \n", want: lintFailed(lintExit(".", 3, "compile exploded", "partial output")))
+  LintCase(name: "non-zero status wins over valid JSON", module: lintNested, status: 1, stdout: "{\"Issues\":[]}\n", want: lintFailed(lintExit(lintNested, 1, "", "{\"Issues\":[]}")))
+  LintCase(name: "negative status", status: -1, stderr: "killed", stdout: "", want: lintFailed(lintExit(".", -1, "killed", "")))
+  LintCase(name: "non-zero status with nothing printed", status: 2, stdout: "", want: lintFailed(lintExit(".", 2, "", "")))
+  LintCase(name: "zero status ignores stderr", stderr: "warning: slow\n", stdout: "{\"Issues\":[]}\n", want: "no findings")
+]
+
+let lintReadableCases: [LintCase!]! = [
+  LintCase(name: "empty output", stdout: "", want: lintFailed(lintNotJson(".", "")))
+  LintCase(name: "blank output", stdout: "  \n", want: lintFailed(lintNotJson(".", "")))
+  LintCase(name: "log text instead of JSON", stdout: "level=error msg=\"boom\"\n", want: lintFailed(lintNotJson(".", "level=error msg=\"boom\"")))
+  LintCase(name: "log text in a nested module", module: lintNested, stdout: "level=error\n", want: lintFailed(lintNotJson(lintNested, "level=error")))
+  LintCase(name: "a JSON array", stdout: "[]", want: lintFailed(lintNotJson(".", "[]")))
+  LintCase(name: "text after the object", stdout: "{\"Issues\":[]} trailing", want: lintFailed(lintNotJson(".", "{\"Issues\":[]} trailing")))
+  LintCase(name: "text before the object", stdout: "warn\n{\"Issues\":[]}", want: lintFailed(lintNotJson(".", "warn\n{\"Issues\":[]}")))
+  LintCase(name: "an opening brace only", stdout: "{", want: lintFailed(lintNotJson(".", "{")))
+  LintCase(name: "a closing brace only", stdout: "}", want: lintFailed(lintNotJson(".", "}")))
+  LintCase(name: "trailing newlines are trimmed", stdout: "{\"Issues\":[]}\n\n", want: "no findings")
+  LintCase(name: "surrounding spaces are trimmed", stdout: "  {\"Issues\":[]}  ", want: "no findings")
+  LintCase(name: "pretty printed output", stdout: "{\n  \"Issues\": [\n  ],\n  \"Report\": {}\n}\n", want: "no findings")
+]
+
+let lintIssuesFieldCases: [LintCase!]! = [
+  LintCase(name: "empty object", stdout: "{}", want: lintFailed(lintNoIssues(".")))
+  LintCase(name: "Issues absent beside other keys", stdout: "{\"Report\":{}}", want: lintFailed(lintNoIssues(".")))
+  LintCase(name: "Issues key is case sensitive", stdout: "{\"issues\":[]}", want: lintFailed(lintNoIssues(".")))
+  LintCase(name: "Issues only nested", stdout: "{\"Report\":{\"Issues\":[]}}", want: lintFailed(lintNoIssues(".")))
+  LintCase(name: "similar key", stdout: "{\"Issues2\":[]}", want: lintFailed(lintNoIssues(".")))
+  LintCase(name: "absent Issues in a nested module", module: lintNested, stdout: "{}", want: lintFailed(lintNoIssues(lintNested)))
+  LintCase(name: "explicit null Issues", stdout: "{\"Issues\":null}", want: "no findings")
+  LintCase(name: "null Issues beside other keys", stdout: "{\"Issues\": null, \"Report\":{}}", want: "no findings")
+  LintCase(name: "null Issues last", stdout: "{\"Report\":{}, \"Issues\" : null }", want: "no findings")
+  LintCase(name: "empty Issues", stdout: "{\"Issues\":[]}", want: "no findings")
+  LintCase(name: "the string null", stdout: "{\"Issues\":\"null\"}", want: lintFailed(lintUnreadableIssues(".")))
+  LintCase(name: "a number", stdout: "{\"Issues\":0}", want: lintFailed(lintUnreadableIssues(".")))
+  LintCase(name: "a fraction", stdout: "{\"Issues\":1.5}", want: lintFailed(lintUnreadableIssues(".")))
+  LintCase(name: "true", stdout: "{\"Issues\":true}", want: lintFailed(lintUnreadableIssues(".")))
+  LintCase(name: "false", stdout: "{\"Issues\":false}", want: lintFailed(lintUnreadableIssues(".")))
+  LintCase(name: "an empty object", stdout: "{\"Issues\":{}}", want: lintFailed(lintUnreadableIssues(".")))
+  LintCase(name: "an object of issues", stdout: "{\"Issues\":{\"0\":{}}}", want: lintFailed(lintUnreadableIssues(".")))
+  LintCase(name: "a string", stdout: "{\"Issues\":\"x\"}", want: lintFailed(lintUnreadableIssues(".")))
+  LintCase(name: "unreadable Issues in a nested module", module: lintNested, stdout: "{\"Issues\":3}", want: lintFailed(lintUnreadableIssues(lintNested)))
+]
+
+let lintMissingFieldCases: [LintCase!]! = [
+  lintBadIssue("no FromLinter", lintIssueOf(null, "\"t\"", "\"/src/a.go\"", "3"))
+  lintBadIssue("empty FromLinter", lintIssueOf("\"\"", "\"t\"", "\"/src/a.go\"", "3"))
+  lintBadIssue("array FromLinter", lintIssueOf("[]", "\"t\"", "\"/src/a.go\"", "3"))
+  lintBadIssue("object FromLinter", lintIssueOf("{}", "\"t\"", "\"/src/a.go\"", "3"))
+  lintBadIssue("no Pos", lintIssue(lintMember("FromLinter", "\"errcheck\"") + lintMember("Text", "\"t\"")))
+  lintBadIssue("null Pos", lintIssue(lintMember("FromLinter", "\"errcheck\"") + lintMember("Pos", "null")))
+  lintBadIssue("string Pos", lintIssue(lintMember("FromLinter", "\"errcheck\"") + lintMember("Pos", "\"/src/a.go:3\"")))
+  lintBadIssue("array Pos", lintIssue(lintMember("FromLinter", "\"errcheck\"") + lintMember("Pos", "[]")))
+  lintBadIssue("empty Pos", lintIssue(lintMember("FromLinter", "\"errcheck\"") + lintMember("Pos", "{}")))
+  lintBadIssue("no Filename", lintIssueOf("\"errcheck\"", "\"t\"", null, "3"))
+  lintBadIssue("empty Filename", lintIssueOf("\"errcheck\"", "\"t\"", "\"\"", "3"))
+  lintBadIssue("object Filename", lintIssueOf("\"errcheck\"", "\"t\"", "{}", "3"))
+  lintBadIssue("array Filename", lintIssueOf("\"errcheck\"", "\"t\"", "[]", "3"))
+  lintBadIssue("no Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", null))
+  lintBadIssue("string Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "\"3\""))
+  lintBadIssue("null Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "null"))
+  lintBadIssue("true Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "true"))
+  lintBadIssue("negative Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "-3"))
+  lintBadIssue("negative zero Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "-0"))
+  lintBadIssue("fractional Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "2.5"))
+  lintBadIssue("whole fractional Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "3.0"))
+  lintBadIssue("exponent Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "1e2"))
+  lintBadIssue("array Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "[]"))
+  lintBadIssue("object Line", lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "{}"))
+  lintBadIssue("number issue", "5")
+  lintBadIssue("null issue", "null")
+  lintBadIssue("string issue", "\"x\"")
+  lintBadIssue("array issue", "[]")
+  lintBadIssue("true issue", "true")
+  lintBadIssue("empty object issue", "{}")
+  LintCase(name: "the position names the failing issue", stdout: lintOutput([lintGood("errcheck", "3"), lintGood("govet", "4"), lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "-1")]), want: lintFailed(lintIssueMessage(".", 2)))
+  LintCase(name: "the first failing issue is reported", stdout: lintOutput([lintGood("errcheck", "3"), lintIssueOf(null, "\"t\"", "\"/src/a.go\"", "3"), lintGood("govet", "4"), lintIssueOf("\"errcheck\"", "\"t\"", "\"/src/a.go\"", "0.5")]), want: lintFailed(lintIssueMessage(".", 1)))
+  LintCase(name: "the issue message in a nested module", module: lintNested, stdout: lintOutput([lintIssueOf(null, null, null, null)]), want: lintFailed(lintIssueMessage(lintNested, 0)))
+]
+
+let lintLineCases: [LintCase!]! = [
+  LintCase(name: "line zero is accepted and shown as 1", stdout: lintOutput([lintGood("errcheck", "0")]), want: lintRowOf("errcheck", 1, "msg"))
+  LintCase(name: "line one", stdout: lintOutput([lintGood("errcheck", "1")]), want: lintRowOf("errcheck", 1, "msg"))
+  LintCase(name: "a large line", stdout: lintOutput([lintGood("errcheck", "123456")]), want: lintRowOf("errcheck", 123456, "msg"))
+  LintCase(name: "complexity line zero looks up line 1", stdout: lintOutput([lintGood("funlen", "0")]), want: lintRowOf("funlen", 1, "msg (baseline symbol \"(none)\")"))
+  LintCase(name: "complexity line inside a function", stdout: lintOutput([lintGood("gocognit", "3")]), want: lintRowOf("gocognit", 3, "msg (baseline symbol \"F\")"))
+  LintCase(name: "complexity line past the end of the file", stdout: lintOutput([lintGood("nestif", "99")]), want: lintRowOf("nestif", 99, "msg (baseline symbol \"F\")"))
+  LintCase(name: "dupl in the root module keeps its text", stdout: lintOutput([lintIssueOf("\"dupl\"", "\"1-2 lines are duplicate of `a.go:5-6`\"", "\"/src/a.go\"", "3")]), want: lintRowOf("dupl", 3, "1-2 lines are duplicate of `a.go:5-6` (baseline symbol \"F\")"))
+  LintCase(name: "dupl in a nested module is re-prefixed", module: lintNested, stdout: lintOutput([lintIssueOf("\"dupl\"", "\"1-2 lines are duplicate of `a.go:5-6`\"", "\"/src/svc/api/a.go\"", "3")]), want: "svc/api/a.go:3: dupl: 1-2 lines are duplicate of `svc/api/a.go:5-6` (baseline symbol \"F\")")
+  LintCase(name: "every registered linter is accepted", stdout: lintOutput(["errcheck", "govet", "ineffassign", "staticcheck", "unused", "godox", "funlen", "gocognit", "nestif", "dupl"].map { name => lintGood(name, "3") }), want: [
+    lintRowOf("dupl", 3, "msg (baseline symbol \"F\")")
+    lintRowOf("errcheck", 3, "msg")
+    lintRowOf("funlen", 3, "msg (baseline symbol \"F\")")
+    lintRowOf("gocognit", 3, "msg (baseline symbol \"F\")")
+    lintRowOf("godox", 3, "msg")
+    lintRowOf("govet", 3, "msg")
+    lintRowOf("ineffassign", 3, "msg")
+    lintRowOf("nestif", 3, "msg (baseline symbol \"F\")")
+    lintRowOf("staticcheck", 3, "msg")
+    lintRowOf("unused", 3, "msg")
+  ].join("\n"))
+]
+
+let lintTypedFieldCases: [LintCase!]! = [
+  LintCase(name: "a numeric FromLinter is read as text", stdout: lintOutput([lintIssueOf("5", "\"t\"", "\"/src/a.go\"", "3")]), want: lintFailed(lintUnregistered(".", "5", "/src/a.go:3")))
+  LintCase(name: "a null FromLinter is read as text", stdout: lintOutput([lintIssueOf("null", "\"t\"", "\"/src/a.go\"", "3")]), want: lintFailed(lintUnregistered(".", "null", "/src/a.go:3")))
+  LintCase(name: "a true FromLinter is read as text", stdout: lintOutput([lintIssueOf("true", "\"t\"", "\"/src/a.go\"", "3")]), want: lintFailed(lintUnregistered(".", "true", "/src/a.go:3")))
+  LintCase(name: "a fractional FromLinter is read as text", stdout: lintOutput([lintIssueOf("1.5", "\"t\"", "\"/src/a.go\"", "3")]), want: lintFailed(lintUnregistered(".", "1.5", "/src/a.go:3")))
+  LintCase(name: "linter names are case sensitive", stdout: lintOutput([lintIssueOf("\"Errcheck\"", "\"t\"", "\"/src/a.go\"", "3")]), want: lintFailed(lintUnregistered(".", "Errcheck", "/src/a.go:3")))
+  LintCase(name: "an unregistered linter at line zero", stdout: lintOutput([lintIssueOf("\"revive\"", "\"t\"", "\"/src/a.go\"", "0")]), want: lintFailed(lintUnregistered(".", "revive", "/src/a.go:1")))
+  LintCase(name: "an unregistered linter in a nested module", module: lintNested, stdout: lintOutput([lintIssueOf("\"revive\"", "\"t\"", "\"/src/svc/api/a.go\"", "7")]), want: lintFailed(lintUnregistered(lintNested, "revive", "/src/svc/api/a.go:7")))
+  LintCase(name: "an unregistered linter wins over a foreign file", stdout: lintOutput([lintIssueOf("\"revive\"", "\"t\"", "\"b.go\"", "3")]), want: lintFailed(lintUnregistered(".", "revive", "b.go:3")))
+  LintCase(name: "a numeric Filename is read as text", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"t\"", "5", "3")]), want: lintFailed(lintOutside(".", "5")))
+  LintCase(name: "a null Filename is read as text", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"t\"", "null", "3")]), want: lintFailed(lintOutside(".", "null")))
+  LintCase(name: "a true Filename is read as text", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"t\"", "true", "3")]), want: lintFailed(lintOutside(".", "true")))
+  LintCase(name: "a relative file", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"t\"", "\"a.go\"", "3")]), want: lintFailed(lintOutside(".", "a.go")))
+  LintCase(name: "a sibling of the source directory", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"t\"", "\"/srcx/a.go\"", "3")]), want: lintFailed(lintOutside(".", "/srcx/a.go")))
+  LintCase(name: "the source directory itself", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"t\"", "\"/src\"", "3")]), want: lintFailed(lintOutside(".", "/src")))
+  LintCase(name: "a file elsewhere", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"t\"", "\"/other/a.go\"", "3")]), want: lintFailed(lintOutside(".", "/other/a.go")))
+  LintCase(name: "a foreign file in a nested module", module: lintNested, stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"t\"", "\"/tmp/a.go\"", "3")]), want: lintFailed(lintOutside(lintNested, "/tmp/a.go")))
+  LintCase(name: "a missing Text is empty", stdout: lintOutput([lintIssueOf("\"errcheck\"", null, "\"/src/a.go\"", "3")]), want: lintRowOf("errcheck", 3, ""))
+  LintCase(name: "an empty Text", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"\"", "\"/src/a.go\"", "3")]), want: lintRowOf("errcheck", 3, ""))
+  LintCase(name: "a null Text is read as text", stdout: lintOutput([lintIssueOf("\"errcheck\"", "null", "\"/src/a.go\"", "3")]), want: lintRowOf("errcheck", 3, "null"))
+  LintCase(name: "a numeric Text is read as text", stdout: lintOutput([lintIssueOf("\"errcheck\"", "5", "\"/src/a.go\"", "3")]), want: lintRowOf("errcheck", 3, "5"))
+  LintCase(name: "a true Text is read as text", stdout: lintOutput([lintIssueOf("\"errcheck\"", "true", "\"/src/a.go\"", "3")]), want: lintRowOf("errcheck", 3, "true"))
+  LintCase(name: "an array Text is empty", stdout: lintOutput([lintIssueOf("\"errcheck\"", "[\"x\"]", "\"/src/a.go\"", "3")]), want: lintRowOf("errcheck", 3, ""))
+  LintCase(name: "an object Text is empty", stdout: lintOutput([lintIssueOf("\"errcheck\"", "{\"a\":\"b\"}", "\"/src/a.go\"", "3")]), want: lintRowOf("errcheck", 3, ""))
+  LintCase(name: "Text escapes as golangci-lint writes them", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"a \\u003cb\\u003e \\u0026 \\\"q\\\" back\\\\slash \\/ tab\\there\\nnext\"", "\"/src/a.go\"", "3")]), want: lintRowOf("errcheck", 3, "a <b> & \"q\" back\\slash / tab\there next"))
+]
+
+let lintTypecheckCases: [LintCase!]! = [
+  LintCase(name: "a build failure names the module", stdout: lintOutput([lintIssueOf("\"typecheck\"", "\"undefined: missing\"", "\"/src/broken.go\"", "4")]), want: lintFailed(lintBuild(".", "/src/broken.go:4", "undefined: missing")))
+  LintCase(name: "a build failure in a nested module", module: lintNested, stdout: lintOutput([lintIssueOf("\"typecheck\"", "\"undefined: missing\"", "\"/src/svc/api/broken.go\"", "4")]), want: lintFailed(lintBuild(lintNested, "/src/svc/api/broken.go:4", "undefined: missing")))
+  LintCase(name: "a build failure at line zero shows line 1", stdout: lintOutput([lintIssueOf("\"typecheck\"", "\"x\"", "\"/src/broken.go\"", "0")]), want: lintFailed(lintBuild(".", "/src/broken.go:1", "x")))
+  LintCase(name: "a build failure without text", stdout: lintOutput([lintIssueOf("\"typecheck\"", null, "\"/src/broken.go\"", "4")]), want: lintFailed(lintBuild(".", "/src/broken.go:4", "")))
+  LintCase(name: "a multi-line build failure is joined", stdout: lintOutput([lintIssueOf("\"typecheck\"", "\"first\\nsecond\"", "\"/src/broken.go\"", "4")]), want: lintFailed(lintBuild(".", "/src/broken.go:4", "first second")))
+  LintCase(name: "a build failure wins over a foreign file", stdout: lintOutput([lintIssueOf("\"typecheck\"", "\"x\"", "\"b.go\"", "4")]), want: lintFailed(lintBuild(".", "b.go:4", "x")))
+  LintCase(name: "an issue without a line wins over a build failure after it", stdout: lintOutput([lintIssueOf(null, "\"t\"", "\"/src/a.go\"", "3"), lintIssueOf("\"typecheck\"", "\"x\"", "\"/src/a.go\"", "4")]), want: lintFailed(lintIssueMessage(".", 0)))
+  LintCase(name: "a build failure before a malformed issue wins", stdout: lintOutput([lintIssueOf("\"typecheck\"", "\"x\"", "\"/src/a.go\"", "4"), lintIssueOf(null, "\"t\"", "\"/src/a.go\"", "3")]), want: lintFailed(lintBuild(".", "/src/a.go:4", "x")))
+]
+
+let lintAllCases: [LintCase!]! = lintProcessCases + lintReadableCases + lintIssuesFieldCases + lintMissingFieldCases + lintLineCases + lintTypedFieldCases + lintTypecheckCases

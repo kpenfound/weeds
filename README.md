@@ -272,6 +272,16 @@ Fixture rules:
   case adds `hand-edits/` on top of the workspace as a hand-edited owned
   skill folder, and its golden `expected.txt` holds one section per check plus
   the generator's changeset.
+- The `scale*` checks generate large inputs in memory and assert the exact
+  output, never a time: about two thousand golangci-lint issues across two
+  modules, and a workspace of about five thousand files (directives, markdown,
+  Go and TS comments, and a skills target installed from a fixture skill
+  source). The generators live in `tests/scale*.dang`; each expected output is
+  computed from how its input was built. No large fixture is committed.
+- The `golintRaises` and `golintBoundaries` checks feed golangci-lint process
+  results (exit status, stdout, stderr) to `goLintReportFromResult`, the test
+  entry point that runs the same validation as the go-lint check, and pin each
+  raise message and trigger boundary.
 - Dagger finds modules only inside a git repository, so run `dagger check`
   from a git checkout.
 

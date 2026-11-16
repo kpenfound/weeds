@@ -219,13 +219,16 @@ let goLintIssues(source: Directory!, module: String!, output: String!): [Finding
   }
 }
 
+let goLintProcessFindings(source: Directory!, module: String!, status: Int!, stdout: String!, stderr: String!): [Finding!]! {
+  if (status != 0) {
+    raise "go-lint: golangci-lint exited with status " + toString(status) + " in module " + moduleLabel(module) + ":\n" + stderr.trimSpace + "\n" + stdout.trimSpace
+  }
+  goLintIssues(source, module, stdout)
+}
+
 let lintModule(source: Directory!, base: Container!, module: String!): [Finding!]! {
   let ran = runGoLint(base, module)
-  let code = ran.exitCode
-  if (code != 0) {
-    raise "go-lint: golangci-lint exited with status " + toString(code) + " in module " + moduleLabel(module) + ":\n" + ran.stderr.trimSpace + "\n" + ran.stdout.trimSpace
-  }
-  goLintIssues(source, module, ran.stdout)
+  goLintProcessFindings(source, module, ran.exitCode, ran.stdout, ran.stderr)
 }
 
 let goLintHits(source: Directory!, files: [String!]!): [Finding!]! {
@@ -250,8 +253,11 @@ let staleBaseline(hits: [Finding!]!, settings: Settings!): [Finding!]! {
     }
 }
 
-let goLintFindings(source: Directory!, files: [String!]!, settings: Settings!): [Finding!]! {
-  let hits = goLintHits(source, files)
+let goLintOutcomeOf(hits: [Finding!]!, settings: Settings!): [Finding!]! {
   let remaining = hits.filter { f => !settings.baseline.any { entry => entry.matches(f) } }
   sortFindings(applyExceptions("go-lint", remaining, settings) + staleBaseline(hits, settings))
+}
+
+let goLintFindings(source: Directory!, files: [String!]!, settings: Settings!): [Finding!]! {
+  goLintOutcomeOf(goLintHits(source, files), settings)
 }
