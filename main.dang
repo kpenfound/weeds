@@ -175,7 +175,7 @@ type Weeds {
   }
 
   let suppressionsOutcome: [Finding!]! {
-    applyExceptions("suppressions", suppressionHits(source, scanFiles), settings)
+    applyExceptions("suppressions", suppressionHits(scanRoot(source, ownedFolders), scanFiles), settings)
   }
 
   let goLintOutcome: [Finding!]! {
