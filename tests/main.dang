@@ -448,6 +448,15 @@ type WeedsTests {
   }
 
   """
+  Finding text, linter names and file names come out of golangci-lint's JSON
+  with the escapes Weeds has always understood and every other escape left as
+  typed, including a backslash before n.
+  """
+  pub golintEscapes: Void @check {
+    lintVerdicts(lintEscapeCases)
+  }
+
+  """
   A thousand golangci-lint issues across fifty Go files through the go-lint
   validation, symbol lookup, baseline, exception and ordering code, with the
   exact rendered report derived from how the issues were generated.
