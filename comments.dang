@@ -113,28 +113,23 @@ let licenceLine(row: String!): Boolean! {
 }
 
 let licenceHeaderLines(lines: [String!]!): [Int!]! {
-  let covered: [Int!]! = []
-  let block: [Int!]! = []
-  let licensed = false
-  let length = leadingLength(lines)
-  lines.takeFirst(length).each { row, index =>
+  let rows = lines.takeFirst(leadingLength(lines))
+  let licensedBlocks: Map[Boolean!]! = [:]
+  let current = 0
+  let blockOf = rows.map { row =>
     if (row.trimSpace == "") {
-      if (licensed) {
-        covered += block
-      }
-      block = []
-      licensed = false
+      current += 1
+      -1
     } else {
-      block += [index + 1]
       if (licenceLine(row)) {
-        licensed = true
+        licensedBlocks = licensedBlocks.with(toString(current), true)
       }
+      current
     }
   }
-  if (licensed) {
-    covered += block
-  }
-  covered
+  blockOf
+    .map { block, index => if (block >= 0 and licensedBlocks.has(toString(block))) { index + 1 } else { 0 } }
+    .filter { number => number > 0 }
 }
 
 let isTrailingComment(lines: [String!]!, m: SgMatch!): Boolean! {
@@ -170,12 +165,12 @@ let isAttachedDoc(lines: [String!]!, m: SgMatch!): Boolean! {
   attached
 }
 
-let classifyComment(path: String!, lang: String!, lines: [String!]!, header: [Int!]!, m: SgMatch!): [Finding!]! {
+let classifyComment(path: String!, lang: String!, lines: [String!]!, header: Map[Boolean!]!, m: SgMatch!): [Finding!]! {
   let line = m.range.start.line + 1
   let base = commentBase(m.ruleId)
   if (base == "comment-todo") {
     [Finding(path: path, line: line, rule: m.ruleId, message: commentMessage(base))]
-  } else if (header.contains(line)) {
+  } else if (header.has(toString(line))) {
     []
   } else if (isTrailingComment(lines, m)) {
     [Finding(path: path, line: line, rule: lang + "-comment-detached", message: commentMessage("comment-trailing"))]
@@ -196,7 +191,10 @@ let commentFindings(path: String!, text: String!, found: [SgMatch!]!): [Finding!
   if (isGeneratedFile(lang, lines)) {
     return []
   }
-  let header = licenceHeaderLines(lines)
+  let header: Map[Boolean!]! = [:]
+  licenceHeaderLines(lines).each { number =>
+    header = header.with(toString(number), true)
+  }
   let best: Map[Int!]! = [:]
   found.each { m =>
     let key = commentPositionKey(m)
@@ -205,9 +203,32 @@ let commentFindings(path: String!, text: String!, found: [SgMatch!]!): [Finding!
       best = best.with(key, rank)
     }
   }
-  found
-    .filter { m => commentPriority(m.ruleId) == best[commentPositionKey(m)]! }
-    .reduce([] :: [Finding!]!) { all, m => all + classifyComment(path, lang, lines, header, m) }
+  concatFindings(
+    found
+      .filter { m => commentPriority(m.ruleId) == best[commentPositionKey(m)]! }
+      .map { m => classifyComment(path, lang, lines, header, m) }
+  )
+}
+
+let concatFindings(groups: [[Finding!]!]!): [Finding!]! {
+  let total = groups.reduce(0) { count, group => count + group.length }
+  if (total == 0) {
+    return []
+  }
+  let which = 0
+  let offset = 0
+  "".padLeft(total).split("").map { slot =>
+    loop {
+      if (offset < groups[which]!.length) {
+        break
+      }
+      which += 1
+      offset = 0
+    }
+    let item = groups[which]![offset]!
+    offset += 1
+    item
+  }
 }
 
 let commentFilesOf(matches: [SgMatch!]!): [String!]! {
