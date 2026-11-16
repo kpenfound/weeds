@@ -1,0 +1,25 @@
+let lintTextCase(name: String!, text: String!, want: String!): LintCase! {
+  LintCase(name: name, stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"" + text + "\"", "\"/src/a.go\"", "3")]), want: lintRowOf("errcheck", 3, want))
+}
+
+# Text is read between its quotes and turned into text by the five-step mapping
+# in unescapeJson, which knows only \u0026, \u003c, \u003e, \/, \n, \t, \" and \\,
+# applies them in that order, and leaves every other escape as typed. The
+# expected texts below follow that mapping step by step.
+let lintEscapeCases: [LintCase!]! = [
+  lintTextCase("a carriage return escape stays as typed", "a\\rb", "a\\rb")
+  lintTextCase("a control character escape stays as typed", "x\\u0001y", "x\\u0001y")
+  lintTextCase("line and paragraph separator escapes stay as typed", "l\\u2028s\\u2029p", "l\\u2028s\\u2029p")
+  lintTextCase("an accented letter escape stays as typed", "caf\\u00e9", "caf\\u00e9")
+  lintTextCase("an accented letter written out is kept", "café", "café")
+  lintTextCase("an escaped backslash before n is a backslash and a newline", "back\\\\nslash", "back\\ slash")
+  lintTextCase("an escaped backslash before t is a backslash and a tab", "a\\\\tb", "a\\\tb")
+  lintTextCase("an escaped backslash before u0026 is a backslash and an ampersand", "x\\\\u0026y", "x\\&y")
+  lintTextCase("an escaped backslash before an escaped quote", "a\\\\\\\"b", "a\\\"b")
+  lintTextCase("an escaped backslash alone", "dir\\\\file", "dir\\file")
+  lintTextCase("all the escapes the mapping knows", "\\u003c\\u003e \\u0026 \\/ \\t \\n \\\"", "<> & / \t   \"")
+  LintCase(name: "a linter name with an escape stays as typed", stdout: lintOutput([lintIssueOf("\"\\u0065rrcheck\"", "\"msg\"", "\"/src/a.go\"", "3")]), want: lintFailed(lintUnregistered(".", "\\u0065rrcheck", "/src/a.go:3")))
+  LintCase(name: "a file name with an escape stays as typed", stdout: lintOutput([lintIssueOf("\"errcheck\"", "\"msg\"", "\"/src/a\\u002ego\"", "3")]), want: "a\\u002ego:3: errcheck: msg")
+  LintCase(name: "a build failure keeps an unmapped escape and joins its newline", stdout: lintOutput([lintIssueOf("\"typecheck\"", "\"x\\r\\ny\"", "\"/src/broken.go\"", "4")]), want: lintFailed(lintBuild(".", "/src/broken.go:4", "x\\r y")))
+  LintCase(name: "a build failure with an escaped backslash before n", stdout: lintOutput([lintIssueOf("\"typecheck\"", "\"quote \\\\n here\"", "\"/src/broken.go\"", "4")]), want: lintFailed(lintBuild(".", "/src/broken.go:4", "quote \\  here")))
+]

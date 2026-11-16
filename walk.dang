@@ -9,22 +9,19 @@ let isRealFile(source: Directory!, path: String!): Boolean! {
 }
 
 let mergeStrings(left: [String!]!, right: [String!]!): [String!]! {
-  let out: [String!]! = []
   let i = 0
   let j = 0
-  loop {
-    if (i >= left.length and j >= right.length) {
-      break
-    }
+  (left + right).map { slot =>
     if (j >= right.length or (i < left.length and left[i]! <= right[j]!)) {
-      out += [left[i]!]
+      let next = left[i]!
       i += 1
+      next
     } else {
-      out += [right[j]!]
+      let next = right[j]!
       j += 1
+      next
     }
   }
-  out
 }
 
 let sortStrings(items: [String!]!): [String!]! {
@@ -36,21 +33,23 @@ let sortStrings(items: [String!]!): [String!]! {
   }
 }
 
-let findOwnedFolders(source: Directory!): [String!]! {
-  let owned: [String!]! = []
-  skillsDirectories.each { target =>
-    let agent = target.trimSuffix("/skills")
-    if (isRealDirectory(source, agent) and isRealDirectory(source, target)) {
-      source.entries(path: target).each { entry =>
-        let folder = target + "/" + entry.trimSuffix("/")
+let ownedIn(source: Directory!, target: String!): [String!]! {
+  let agent = target.trimSuffix("/skills")
+  if (isRealDirectory(source, agent) and isRealDirectory(source, target)) {
+    source.entries(path: target)
+      .map { entry => target + "/" + entry.trimSuffix("/") }
+      .filter { folder =>
         let marker = folder + "/" + markerFile
-        if (isRealDirectory(source, folder) and isRealFile(source, marker) and isOwnerMarker(source.file(marker).contents)) {
-          owned += [folder]
-        }
+        isRealDirectory(source, folder) and isRealFile(source, marker) and isOwnerMarker(source.file(marker).contents)
       }
-    }
+  } else {
+    []
   }
-  sortStrings(owned)
+}
+
+let findOwnedFolders(source: Directory!): [String!]! {
+  let none: [String!]! = []
+  skillsDirectories.reduce(none) { owned, target => mergeStrings(owned, sortStrings(ownedIn(source, target))) }
 }
 
 let scanRoot(source: Directory!, owned: [String!]!): Directory! {

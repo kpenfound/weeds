@@ -428,6 +428,95 @@ type WeedsTests {
   }
 
   """
+  Every go-lint raise keeps its exact text, through the validation code the
+  check itself runs on golangci-lint's process result: non-zero exit status,
+  unreadable JSON, a missing or unreadable Issues list, and the explicit null
+  that means no findings.
+  """
+  pub golintRaises: Void @check {
+    lintVerdicts(lintProcessCases + lintReadableCases + lintIssuesFieldCases)
+  }
+
+  """
+  The boundaries go-lint draws on one issue: a missing or wrong-typed
+  FromLinter, Text, Pos.Filename and Pos.Line, accepted and rejected line
+  values, build failures, unregistered linters and files outside the
+  workspace, each with its exact result.
+  """
+  pub golintBoundaries: Void @check {
+    lintVerdicts(lintMissingFieldCases + lintLineCases + lintTypedFieldCases + lintTypecheckCases)
+  }
+
+  """
+  Finding text, linter names and file names come out of golangci-lint's JSON
+  with the escapes Weeds has always understood and every other escape left as
+  typed, including a backslash before n.
+  """
+  pub golintEscapes: Void @check {
+    lintVerdicts(lintEscapeCases)
+  }
+
+  """
+  A thousand golangci-lint issues across fifty Go files through the go-lint
+  validation, symbol lookup, baseline, exception and ordering code, with the
+  exact rendered report derived from how the issues were generated.
+  """
+  pub scaleGolint: Void @check {
+    let subject = weeds(ws: goScaleTree("", scaleRootFiles).asWorkspace)
+    sameText("the go-lint report", goScaleExpected("", scaleRootFiles), subject.goLintReportFromResult(".", 0, goScaleOutput("", scaleRootFiles), ""))
+  }
+
+  """
+  Another thousand issues in a nested module: finding paths and the
+  duplicate-of text are re-prefixed with the module directory.
+  """
+  pub scaleGolintNested: Void @check {
+    let subject = weeds(ws: goScaleTree("svc/api/", 50).asWorkspace)
+    sameText("the nested module go-lint report", goScaleExpected("svc/api/", 50), subject.goLintReportFromResult("svc/api", 0, goScaleOutput("svc/api/", 50), ""))
+  }
+
+  """
+  A workspace of about five thousand in-memory files: the suppressions check
+  finds every directive form, near-misses and case variants in hidden and
+  gitignored files, skips .git, vendor, node_modules and owned skill folders,
+  and applies exceptions; the exact report is derived from the generator.
+  """
+  pub scaleSuppressions: Void @check {
+    let subject = scaleSubject
+    let nonSkipped = wsAllFiles.filter { f => !f.skipped }.length
+    expect(subject.scanFiles.length == nonSkipped, "the scan must see " + toString(nonSkipped) + " files, got " + toString(subject.scanFiles.length))
+    sameText("the suppressions report", wsSuppressionsExpected, subject.suppressionsReport)
+  }
+
+  """
+  The same workspace through the markdown check: always-allowed markdown, the
+  allowlist with its stale entries, exceptions and skipped folders.
+  """
+  pub scaleMarkdown: Void @check {
+    sameText("the markdown report", wsMarkdownExpected, scaleSubject.markdownReport)
+  }
+
+  """
+  The same workspace through the comments check with real ast-grep: Go and TS
+  files with every comment rule, generated files, licence headers, an
+  exception and skipped folders.
+  """
+  pub scaleComments: Void @check {
+    sameText("the comments report", wsCommentsExpected, scaleSubject.commentsReport)
+  }
+
+  """
+  The same workspace through installed-skills, with a real skills target
+  installed from the fixed fake skill source: owned folders, a hand edit, a
+  missing file, a deselected owned folder, missing skills and exceptions.
+  """
+  pub scaleInstalledSkills: Void @check {
+    let subject = scaleSubject
+    sameText("the installed-skills report", wsInstalledExpected, subject.installedSkillsReport)
+    sameText("the installed-skills check", wsInstalledExpected, checkResult(subject.installedSkills))
+  }
+
+  """
   The skills pin is a full 40-character SHA and the installer holds no branch,
   tag, latest or credential token. The validator is tested on in-memory text
   first, then applied to skills.dang.
@@ -450,6 +539,40 @@ type WeedsTests {
     let real = pinProblems(generatorSource.contents)
     expect(real.isEmpty, "skills.dang must pin a full SHA with no lookup or credential tokens:\n- " + real.join("\n- "))
     null
+  }
+
+  let lintVerdicts(cases: [LintCase!]!): Void {
+    let tree = directory.withNewFile("a.go", lintWorkspaceSource).withNewFile("svc/api/a.go", lintWorkspaceSource)
+    let subject = weeds(ws: tree.asWorkspace)
+    let failures = cases.map { c =>
+      let got = { subject.goLintReportFromResult(c.module, c.status, c.stdout, c.stderr) } rescue { err: Error => lintFailed(lintPlain(err.message)) }
+      if (got == c.want) { "" } else { "FAIL " + c.name + ":\n  expected: " + c.want + "\n  actual:   " + got }
+    }.filter { verdict => verdict != "" }
+    if (!failures.isEmpty) {
+      raise toString(failures.length) + " of " + toString(cases.length) + " go-lint cases failed:\n\n" + failures.join("\n\n")
+    }
+    null
+  }
+
+  let scaleSubject: Weeds! {
+    weeds(ws: scaleWorkspace.asWorkspace, skillSource: skillSource("full"))
+  }
+
+  let scaleWorkspace: Directory! {
+    let marker = "github.com/kpenfound/weeds\n"
+    let source = skillSource("full")
+    let installed = ["behavioral-testing", "no-comments", "no-deltas", "unslop"].reduce(assembleTree(wsAllFiles)) { dir, name =>
+      dir
+        .withDirectory(".agents/skills/" + name, source.directory(name))
+        .withNewFile(".agents/skills/" + name + "/.weeds-managed", marker)
+    }
+    installed
+      .withNewFile(".agents/skills/no-deltas/SKILL.md", wsSkillHandEdit)
+      .withNewFile(".agents/skills/no-deltas/notes.txt", "extra\n")
+      .withoutFile(".agents/skills/unslop/SKILL.md")
+      .withNewFile(".agents/skills/legacy-skill/.weeds-managed", marker)
+      .withNewFile(".agents/skills/legacy-skill/a.txt", "a\n")
+      .withNewFile(".agents/skills/legacy-skill/sub/b.txt", "b\n")
   }
 
   let skillSource(name: String!): Directory! {

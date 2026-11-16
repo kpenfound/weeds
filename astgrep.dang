@@ -68,9 +68,37 @@ let scanComments(source: Directory!): [SgMatch!]! {
   found.filter { m => checkCommentRule(m.ruleId) and !commentIgnoredRules.contains(m.ruleId) }
 }
 
+let groupByFile(matches: [SgMatch!]!): Map[[SgMatch!]!]! {
+  let first: Map[Int!]! = [:]
+  let last: Map[Int!]! = [:]
+  let size: Map[Int!]! = [:]
+  let link: Map[Int!]! = [:]
+  matches.each { m, index =>
+    if (first.has(m.file)) {
+      link = link.with(toString(last[m.file]!), index)
+      size = size.with(m.file, size[m.file]! + 1)
+    } else {
+      first = first.with(m.file, index)
+      size = size.with(m.file, 1)
+    }
+    last = last.with(m.file, index)
+  }
+  let groups: Map[[SgMatch!]!]! = [:]
+  first.keys.each { file =>
+    let at = first[file]!
+    groups = groups.with(file, "".padLeft(size[file]!).split("").map { slot =>
+      let hit = matches[at]!
+      at = link[toString(at)] ?? at
+      hit
+    })
+  }
+  groups
+}
+
 let commentsFor(source: Directory!): [Finding!]! {
   let found = scanComments(source)
-  commentFilesOf(found).reduce([] :: [Finding!]!) { all, path =>
-    all + commentFindings(path, source.file(path).contents, found.filter { m => m.file == path })
-  }
+  let groups = groupByFile(found)
+  concatFindings(commentFilesOf(found).map { path =>
+    commentFindings(path, source.file(path).contents, groups[path] ?? [])
+  })
 }

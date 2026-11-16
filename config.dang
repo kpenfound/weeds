@@ -8,6 +8,7 @@ type ConfigException {
   paths: [String!]! = []
   reason: String! = ""
   line: Int! = 1
+  patterns: [String!]! = []
 
   name: String! {
     if (check != "") {
@@ -25,8 +26,12 @@ type ConfigException {
     }
   }
 
+  covers(finding: Finding!): Boolean! {
+    (rule == "" or finding.rule == rule) and patterns.any { pattern => patternMatches(pattern, finding.path) }
+  }
+
   matches(scan: String!, finding: Finding!): Boolean! {
-    appliesTo(scan) and (rule == "" or finding.rule == rule) and paths.any { glob => pathMatches(glob, finding.path) }
+    appliesTo(scan) and covers(finding)
   }
 }
 
@@ -242,6 +247,10 @@ let entryLine(text: String!, header: String!, key: String!, nth: Int!): Int! {
   }
 }
 
+let configException(check: String!, rule: String!, paths: [String!]!, reason: String!, line: Int!): ConfigException! {
+  ConfigException(check: check, rule: rule, paths: paths, reason: reason, line: line, patterns: globPatterns(paths))
+}
+
 let readException(doc: TomlDoc!, path: String!, label: String!, line: Int!): {{ item: ConfigException!, problems: [String!]! }}! {
   if (doc.kindOf(path) != "object") {
     return {{ item: ConfigException(line: line), problems: [label + " must be a table with check or rule and paths"] }}
@@ -273,7 +282,7 @@ let readException(doc: TomlDoc!, path: String!, label: String!, line: Int!): {{ 
     }
   }
   {{
-    item: ConfigException(check: check, rule: rule, paths: stringsAt(doc, path + ".paths"), reason: doc.textOf(path + ".reason"), line: line)
+    item: configException(check, rule, stringsAt(doc, path + ".paths"), doc.textOf(path + ".reason"), line)
     problems: problems
   }}
 }
@@ -410,9 +419,24 @@ let staleFinding(rule: String!, line: Int!, message: String!): Finding! {
 }
 
 let applyExceptions(scan: String!, found: [Finding!]!, settings: Settings!): [Finding!]! {
-  let kept = found.filter { f => !settings.exceptions.any { ex => ex.matches(scan, f) } }
-  let stale = settings.exceptions
-    .filter { ex => ex.appliesTo(scan) and !found.any { f => ex.matches(scan, f) } }
+  let active = settings.exceptions.filter { ex => ex.appliesTo(scan) }
+  let used: Map[Boolean!]! = [:]
+  let kept = found.filter { f =>
+    let covered = false
+    active.each { ex, index =>
+      if ((!covered or !used.has(toString(index))) and ex.covers(f)) {
+        covered = true
+        used = used.with(toString(index), true)
+      }
+    }
+    !covered
+  }
+  let position = -1
+  let stale = active
+    .filter { ex =>
+      position += 1
+      !used.has(toString(position))
+    }
     .map { ex =>
       staleFinding("stale-exception", ex.line, "exception for " + ex.name + " with paths " + listOf(ex.paths) + " matches no finding; remove it")
     }

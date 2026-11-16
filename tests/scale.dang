@@ -1,0 +1,333 @@
+type ScaleFile {
+  path: String!
+  text: String!
+  skipped: Boolean! = false
+}
+
+let scaleSeed = "0"
+
+let scaleRootFiles = 50
+
+let scaleRange(n: Int!): [Int!]! {
+  "".padLeft(n).split("").map { x, i => i }
+}
+
+let pad2(n: Int!): String! {
+  toString(100 + n).trimPrefix("1")
+}
+
+let pad3(n: Int!): String! {
+  toString(1000 + n).trimPrefix("1")
+}
+
+let scaleLeafSize = 40
+
+let scaleGroupSize = 10
+
+let assembleTree(files: [ScaleFile!]!): Directory! {
+  let leafCount = (files.length + scaleLeafSize - 1) / scaleLeafSize
+  let leaves = scaleRange(leafCount).map { k =>
+    let leaf = directory
+    files.takeFirst((k + 1) * scaleLeafSize).dropFirst(k * scaleLeafSize).each { f => leaf = leaf.withNewFile(f.path, f.text) }
+    leaf
+  }
+  let groupCount = (leafCount + scaleGroupSize - 1) / scaleGroupSize
+  let groups = scaleRange(groupCount).map { g =>
+    let grouped = directory
+    leaves.takeFirst((g + 1) * scaleGroupSize).dropFirst(g * scaleGroupSize).each { leaf => grouped = grouped.withDirectory(".", leaf) }
+    grouped
+  }
+  let tree = directory
+  groups.each { grouped => tree = tree.withDirectory(".", grouped) }
+  tree
+}
+
+let firstDifference(expected: String!, actual: String!): String! {
+  let want = expected.split("\n")
+  let got = actual.split("\n")
+  let at = -1
+  want.each { row, i =>
+    if (at < 0 and (i >= got.length or got[i]! != row)) {
+      at = i
+    }
+  }
+  if (at < 0 and got.length > want.length) {
+    at = want.length
+  }
+  if (at < 0) {
+    "no difference"
+  } else {
+    "expected " + toString(want.length) + " lines, got " + toString(got.length) + "; first difference at line " + toString(at + 1) + ":\n  expected: " + (want[at] ?? "(nothing)") + "\n  actual:   " + (got[at] ?? "(nothing)")
+  }
+}
+
+let sameText(label: String!, expected: String!, actual: String!): Void {
+  if (expected != actual) {
+    raise label + " differs: " + firstDifference(expected, actual)
+  }
+  null
+}
+
+let rowPath(row: String!): String! {
+  row.split(":")[0]!
+}
+
+let ascendingPaths(rows: [String!]!): Boolean! {
+  let ordered = true
+  rows.each { row, i =>
+    if (i > 0 and rowPath(rows[i - 1]!) > rowPath(row)) {
+      ordered = false
+    }
+  }
+  ordered
+}
+
+let joinedRows(rows: [String!]!): String! {
+  if (!ascendingPaths(rows)) {
+    raise "the expected rows are not in path order; fix the generator"
+  }
+  rows.join("\n")
+}
+
+let tomlBlock(header: String!, lines: [String!]!): String! {
+  header + "\n" + lines.join("\n") + "\n\n"
+}
+
+let tomlList(items: [String!]!): String! {
+  "[" + items.map { item => "\"" + item + "\"" }.join(", ") + "]"
+}
+
+let goScaleStarts: [Int!]! = [5, 10, 15, 19, 21, 23, 25, 30, 34, 37]
+
+let goScaleSymbols(n: String!): [String!]! {
+  ["Plain" + n, "Svc" + n + ".Run", "Val" + n + ".Show", "Var" + n, "Const" + n, "Type" + n, "Gen" + n + ".Get", "Anon" + n + ".Do", "Spaced" + n + ".Name", "(none)"]
+}
+
+let goScaleSymbolAt(n: String!, line: Int!): String! {
+  let names = goScaleSymbols(n)
+  let found = "(none)"
+  goScaleStarts.each { start, k =>
+    if (start <= line) {
+      found = names[k]!
+    }
+  }
+  found
+}
+
+let goScaleSource(id: Int!): String! {
+  let n = toString(id)
+  [
+    "package pk" + n
+    ""
+    "import \"fmt\""
+    ""
+    "func Plain" + n + "(a int) int {"
+    "\tfmt.Println(a)"
+    "\treturn a"
+    "}"
+    ""
+    "func (s *Svc" + n + ") Run() {"
+    "\ts.x++"
+    "\ts.x--"
+    "}"
+    ""
+    "func (v Val" + n + ") Show() {"
+    "\t_ = v"
+    "}"
+    ""
+    "var Var" + n + " = 1"
+    ""
+    "const Const" + n + " = 2"
+    ""
+    "type Type" + n + " struct{}"
+    ""
+    "func (g *Gen" + n + "[T]) Get() T {"
+    "\tvar zero T"
+    "\treturn zero"
+    "}"
+    ""
+    "func (*Anon" + n + ") Do() {"
+    "\tfmt.Println()"
+    "}"
+    ""
+    "func ( q *Spaced" + n + " ) Name() string {"
+    "\treturn \"\""
+    "}"
+    "var ("
+    "\tgrouped" + n + " = 1"
+    ")"
+    ""
+  ].join("\n")
+}
+
+let goScaleSlotLines: [Int!]! = [2, 5, 6, 6, 7, 10, 10, 10, 11, 12, 15, 16, 19, 21, 23, 26, 30, 31, 34, 100]
+
+let goScaleSlotRules: [String!]! = ["dupl", "funlen", "errcheck", "errcheck", "govet", "funlen", "gocognit", "gocognit", "ineffassign", "staticcheck", "unused", "godox", "dupl", "dupl", "nestif", "nestif", "funlen", "staticcheck", "gocognit", "nestif"]
+
+let goScaleComplex(rule: String!): Boolean! {
+  ["funlen", "gocognit", "nestif", "dupl"].contains(rule)
+}
+
+let goScaleGt(escaped: Boolean!): String! {
+  if (escaped) { "\\u003e" } else { ">" }
+}
+
+let goScaleText(slot: Int!, n: String!, path: String!, escaped: Boolean!): String! {
+  let gt = goScaleGt(escaped)
+  case (slot) {
+    0 => "2-12 lines are duplicate of `" + path + ":30-40`"
+    1 => "Function 'Plain" + n + "' has too many statements (63 " + gt + " 40)"
+    2 => "Error return value of `fmt.Println` is not checked"
+    3 => "Error return value of `os.Remove` is not checked"
+    4 => "unreachable: unreachable code"
+    5 => "Function 'Run' is too long (70 " + gt + " 60)"
+    6 => "cognitive complexity 21 of func `(*Svc" + n + ").Run` is high (" + gt + " 15)"
+    7 => "cognitive complexity 30 of func `(*Svc" + n + ").Run` is high (" + gt + " 15)"
+    8 => "ineffectual assignment to s"
+    9 => "SA4006: this value of `s` is never used"
+    10 => "func `Val" + n + ".Show` is unused"
+    11 => if (escaped) { "Line contains TODO/BUG/FIXME: \\\"TODO: tidy " + n + "\\\"" } else { "Line contains TODO/BUG/FIXME: \"TODO: tidy " + n + "\"" }
+    12 => "19-28 lines are duplicate of `" + path + ":21-30`"
+    13 => "21-30 lines are duplicate of `" + path + ":5-14`"
+    14 => "`if a " + gt + " 0` has complex nested blocks (complexity: 6)"
+    15 => "`if b != nil` has complex nested blocks (complexity: 9)"
+    16 => "Function 'Do' has too many statements (41 " + gt + " 40)"
+    17 => if (escaped) { "SA1019: x.Old is deprecated: use \\u003cb\\u003e \\u0026 \\\"quote\\\" back\\\\slash" } else { "SA1019: x.Old is deprecated: use <b> & \"quote\" back\\slash" }
+    18 => "cognitive complexity 17 of func `(*Spaced" + n + ").Name` is high (" + gt + " 15)"
+    else => if (escaped) { "`if c` has complex nested blocks (complexity: 5)\\nsee docs" } else { "`if c` has complex nested blocks (complexity: 5) see docs" }
+  }
+}
+
+let goScaleRel(id: Int!): String! {
+  "pk" + toString(id / 10) + "/f0" + toString(id % 10) + ".go"
+}
+
+let goScaleIssue(prefix: String!, id: Int!, slot: Int!): String! {
+  let n = toString(id)
+  let line = goScaleSlotLines[slot]!
+  let extras = if (slot % 3 == 0) {
+    ",\"LineRange\":{\"From\":" + toString(line) + ",\"To\":" + toString(line + 1) + "}"
+  } else if (slot % 5 == 2) {
+    ",\"Replacement\":{\"NeedOnlyDelete\":false,\"NewLines\":[\"x := map[string]int{\\\"a\\\": 1}\"]}"
+  } else {
+    ""
+  }
+  "{\"FromLinter\":\"" + goScaleSlotRules[slot]! + "\",\"Text\":\"" + goScaleText(slot, n, goScaleRel(id), true) + "\",\"Severity\":\"\",\"SourceLines\":[\"\\tm := map[string]int{\\\"a\\\": 1}\"]" + extras + ",\"Pos\":{\"Filename\":\"/src/" + prefix + goScaleRel(id) + "\",\"Offset\":" + toString(100 + line) + ",\"Line\":" + toString(line) + ",\"Column\":2},\"ExpectNoLint\":false,\"ExpectedNoLintLinter\":\"\"}"
+}
+
+let goScaleOutput(prefix: String!, files: Int!): String! {
+  let total = files * 20
+  let stride = 7
+  if (total % stride == 0) {
+    raise "the issue count must not be a multiple of the stride"
+  }
+  "{\"Issues\":[" + scaleRange(total).map { p =>
+    let at = (p * stride) % total
+    goScaleIssue(prefix, at / 20, at % 20)
+  }.join(",") + "],\"Report\":{\"Warnings\":[],\"Linters\":[{\"Name\":\"errcheck\",\"Enabled\":true}]}}\n"
+}
+
+let goScaleBaselined(id: Int!, slot: Int!): Boolean! {
+  let m = id % 10
+  id < 50 and (
+    (m == 0 and slot == 1) or
+    (m == 1 and [6, 7, 18].contains(slot)) or
+    (m == 4 and slot == 0) or
+    (m == 5 and [6, 7].contains(slot)) or
+    (m == 6 and slot == 15) or
+    (m == 8 and slot == 19)
+  )
+}
+
+let goScaleExcepted(id: Int!, slot: Int!): Boolean! {
+  (id / 10 == 1 and [2, 3].contains(slot)) or
+    id == 23 or
+    (id % 10 == 9 and slot == 10) or
+    (id / 10 == 3 and [9, 17].contains(slot)) or
+    (id / 10 == 4 and slot == 11)
+}
+
+let goScaleRow(prefix: String!, id: Int!, slot: Int!): String! {
+  let path = prefix + goScaleRel(id)
+  let line = goScaleSlotLines[slot]!
+  let rule = goScaleSlotRules[slot]!
+  let text = goScaleText(slot, toString(id), path, false)
+  let message = if (goScaleComplex(rule)) {
+    text + " (baseline symbol \"" + goScaleSymbolAt(toString(id), line) + "\")"
+  } else {
+    text
+  }
+  path + ":" + toString(line) + ": " + rule + ": " + message
+}
+
+let goScaleExceptionBlocks(prefix: String!): [String!]! {
+  [
+    tomlBlock("[[exceptions]]", ["rule = \"errcheck\"", "paths = " + tomlList([prefix + "pk1/**"]), "reason = \"scale: applies\""])
+    tomlBlock("[[exceptions]]", ["check = \"go-lint\"", "paths = " + tomlList([prefix + "pk2/f03.go"]), "reason = \"scale: applies\""])
+    tomlBlock("[[exceptions]]", ["rule = \"unused\"", "paths = " + tomlList(["**/f09.go"]), "reason = \"scale: applies\""])
+    tomlBlock("[[exceptions]]", ["rule = \"staticcheck\"", "paths = " + tomlList([prefix + "pk3/f0?.go"]), "reason = \"scale: applies\""])
+    tomlBlock("[[exceptions]]", ["rule = \"godox\"", "paths = " + tomlList([prefix + "pk4/*.go"]), "reason = \"scale: applies\""])
+    tomlBlock("[[exceptions]]", ["rule = \"govet\"", "paths = " + tomlList(["nowhere/**"]), "reason = \"scale: stale\""])
+    tomlBlock("[[exceptions]]", ["check = \"go-lint\"", "paths = " + tomlList(["pk99/**", "gone/*.go"]), "reason = \"scale: stale\""])
+    tomlBlock("[[exceptions]]", ["check = \"suppressions\"", "paths = " + tomlList(["nowhere/**"]), "reason = \"scale: another check\""])
+    tomlBlock("[[exceptions]]", ["rule = \"nolint\"", "paths = " + tomlList(["nowhere/**"]), "reason = \"scale: another check\""])
+    tomlBlock("[[exceptions]]", ["check = \"markdown\"", "paths = " + tomlList(["nowhere/**"]), "reason = \"scale: another check\""])
+  ]
+}
+
+let goScaleBaselineEntry(prefix: String!, id: Int!): [String!]! {
+  let n = toString(id)
+  let path = prefix + goScaleRel(id)
+  case (id % 10) {
+    0 => ["funlen", path, "Plain" + n]
+    1 => ["gocognit", path, ""]
+    2 => ["nestif", path, "Renamed" + n]
+    3 => ["funlen", path, "Show" + n]
+    4 => ["dupl", path, "(none)"]
+    5 => ["gocognit", path, "Svc" + n + ".Run"]
+    6 => ["nestif", path, "Gen" + n + ".Get"]
+    7 => ["dupl", prefix + "pk" + toString(id / 10) + "/gone" + n + ".go", ""]
+    else => ["nestif", path, "(none)"]
+  }
+}
+
+let goScaleBaselineIds: [Int!]! = scaleRange(50).filter { id => id % 10 != 9 }
+
+let goScaleBaselineStale(id: Int!): Boolean! {
+  [2, 3, 7].contains(id % 10)
+}
+
+let goScaleToml(prefix: String!): String! {
+  let entries = goScaleBaselineIds.map { id =>
+    let entry = goScaleBaselineEntry(prefix, id)
+    tomlBlock("[[go-lint.baseline]]", ["linter = \"" + entry[0]! + "\"", "path = \"" + entry[1]! + "\"", "symbol = \"" + entry[2]! + "\"", "reason = \"scale " + scaleSeed + "\""])
+  }
+  goScaleExceptionBlocks(prefix).join("") + entries.join("")
+}
+
+let goScaleBaselineLine(id: Int!): Int! {
+  51 + 6 * ((id / 10) * 9 + id % 10)
+}
+
+let goScaleStaleRows(prefix: String!): [String!]! {
+  let exceptions = [
+    "weeds.toml:26: stale-exception: exception for rule \"govet\" with paths nowhere/** matches no finding; remove it"
+    "weeds.toml:31: stale-exception: exception for check \"go-lint\" with paths pk99/**, gone/*.go matches no finding; remove it"
+  ]
+  let baseline = goScaleBaselineIds.filter { id => goScaleBaselineStale(id) }.map { id =>
+    let entry = goScaleBaselineEntry(prefix, id)
+    let symbol = if (entry[2]! == "") { "" } else { " symbol \"" + entry[2]! + "\"" }
+    "weeds.toml:" + toString(goScaleBaselineLine(id)) + ": stale-baseline: baseline entry for " + entry[0]! + " in " + entry[1]! + symbol + " matches no finding; remove it"
+  }
+  exceptions + baseline
+}
+
+let goScaleExpected(prefix: String!, files: Int!): String! {
+  let kept = scaleRange(files * 20).filter { at => !goScaleBaselined(at / 20, at % 20) and !goScaleExcepted(at / 20, at % 20) }.map { at => goScaleRow(prefix, at / 20, at % 20) }
+  joinedRows(kept) + "\n" + goScaleStaleRows(prefix).join("\n")
+}
+
+let goScaleTree(prefix: String!, files: Int!): Directory! {
+  let sources = scaleRange(files).map { id => ScaleFile(path: prefix + goScaleRel(id), text: goScaleSource(id)) }
+  assembleTree(sources + [ScaleFile(path: "weeds.toml", text: goScaleToml(prefix))])
+}

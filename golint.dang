@@ -140,8 +140,7 @@ let declaredSymbol(row: String!): String! {
   }
 }
 
-let goSymbol(source: Directory!, path: String!, line: Int!): String! {
-  let rows = source.file(path).contents.split("\n")
+let goSymbol(rows: [String!]!, line: Int!): String! {
   let at = if (line > rows.length) { rows.length - 1 } else { line - 1 }
   let symbol = "(none)"
   loop {
@@ -170,16 +169,107 @@ let baselineSymbolOf(finding: Finding!): String! {
   }
 }
 
-let goLintFinding(source: Directory!, module: String!, doc: TomlDoc!, at: String!): Finding! {
-  let label = moduleLabel(module)
-  let linter = doc.textOf(at + ".FromLinter")
-  let text = doc.textOf(at + ".Text").replace("\n", " ")
-  let file = doc.textOf(at + ".Pos.Filename")
-  let lineText = doc.textOf(at + ".Pos.Line")
-  if (linter == "" or file == "" or doc.kindOf(at + ".Pos.Line") != "other" or !lineText.containsMatch(`^[0-9]+$`)) {
-    raise "go-lint: golangci-lint output for module " + label + " has an issue without a linter, file or line: " + at
+type GoLintPosition {
+  Filename: String
+  Line: Int
+}
+
+type GoLintIssue {
+  FromLinter: String
+  Text: String
+  Pos: GoLintPosition
+}
+
+type GoLintOutput {
+  Issues: [GoLintIssue]
+}
+
+type GoLintListed {
+  Issues: [GoLintIssue]!
+}
+
+type GoLintDecoded {
+  issues: [GoLintIssue]! = []
+  failedAt: Int! = -1
+  problem: String! = ""
+}
+
+# The decoder takes each member only as its declared type. Weeds has always read
+# a bare number, true, false or null in FromLinter, Text or Filename as that
+# text, and a Pos.Line only when it is plain digits. These rewrites give the
+# decoder the same reading: such scalars become strings, an array or object in
+# those members reads as absent (empty text), and a Pos that is not an object or
+# a Line that is not plain digits reads as absent, which the issue check reports.
+# The last rewrite doubles every backslash that starts an escape, so the decoder
+# hands back each string exactly as written between its quotes. unescapeJson then
+# turns it into text, which keeps the output byte for byte what it has always
+# been: it knows only a few escapes, leaves the rest as typed, and applies them
+# in its own order.
+let goLintDecodable(output: String!): String! {
+  output
+    .replaceMatches(`"(FromLinter|Text|Filename)"(\s*:\s*)(-?[0-9][-0-9.eE+]*|true|false|null)`, "\"${1}\"${2}\"${3}\"")
+    .replaceMatches(`"(FromLinter|Text|Filename)"(\s*:\s*)([\[{])`, "\"${1}Hidden\"${2}${3}")
+    .replaceMatches(`"Pos"(\s*:\s*)([^{\s])`, "\"PosHidden\"${1}${2}")
+    .replaceMatches(`"Line"(\s*:\s*)([^0-9\s])`, "\"LineHidden\"${1}${2}")
+    .replaceMatches(`"Line"(\s*:\s*)([0-9]+)([.eE])`, "\"LineHidden\"${1}${2}${3}")
+    .replaceMatches(`(\\)(["\\])|\\([^"\\])`, "\\\\${1}${2}${3}")
+}
+
+let goLintOutputIssues(text: String!): GoLintOutput! {
+  JSON.decode(text)
+}
+
+let goLintListedIssues(text: String!): GoLintListed! {
+  JSON.decode(text)
+}
+
+let goLintDecodeFailure(message: String!): GoLintDecoded! {
+  let m = message.match(`^Issues\[(?P<index>[0-9]+)\]`)
+  if (m != null) {
+    GoLintDecoded(failedAt: parseInt(m!.named["index"]!))
+  } else if (message.hasPrefix("Issues")) {
+    GoLintDecoded(problem: "unreadable")
+  } else {
+    GoLintDecoded(problem: "json")
   }
-  let reported = parseInt(lineText)
+}
+
+let goLintDecodeOutput(text: String!): GoLintDecoded! {
+  let decoded = {
+    let doc = goLintOutputIssues(text)
+    if (doc.Issues == null) {
+      GoLintDecoded(problem: "null")
+    } else {
+      GoLintDecoded(issues: doc.Issues!)
+    }
+  } rescue { err: Error => goLintDecodeFailure(err.message) }
+  if (decoded.problem == "null") {
+    let listed = { goLintListedIssues(text); GoLintDecoded() } rescue { err: Error =>
+      if (err.message.contains("missing required field")) {
+        GoLintDecoded(problem: "absent")
+      } else {
+        GoLintDecoded()
+      }
+    }
+    listed
+  } else {
+    decoded
+  }
+}
+
+let goLintIssueMessage(module: String!, index: Int!): String! {
+  "go-lint: golangci-lint output for module " + moduleLabel(module) + " has an issue without a linter, file or line: Issues[" + toString(index) + "]"
+}
+
+let goLintFinding(module: String!, issue: GoLintIssue, index: Int!): Finding! {
+  let label = moduleLabel(module)
+  let linter = unescapeJson(issue.FromLinter ?? "")
+  let text = unescapeJson(issue.Text ?? "").replace("\n", " ")
+  let file = unescapeJson(issue.Pos.Filename ?? "")
+  let reported = issue.Pos.Line ?? -1
+  if (linter == "" or file == "" or reported < 0) {
+    raise goLintIssueMessage(module, index)
+  }
   let line = if (reported < 1) { 1 } else { reported }
   if (linter == "typecheck") {
     raise "go-lint: golangci-lint could not build module " + label + " (" + file + ":" + toString(line) + "): " + text
@@ -193,39 +283,70 @@ let goLintFinding(source: Directory!, module: String!, doc: TomlDoc!, at: String
   }
   let path = file.trimPrefix(prefix)
   let shown = if (module == ".") { text } else { text.replace("duplicate of `", "duplicate of `" + module + "/") }
-  let message = if (complexityLinters.contains(linter)) {
-    shown + baselineNote(goSymbol(source, path, line))
-  } else {
-    shown
+  Finding(path: path, line: line, rule: linter, message: shown)
+}
+
+let goLintRaiseIssue(module: String!, index: Int!): [Finding!]! {
+  [index].map { failed => raise goLintIssueMessage(module, failed) }
+}
+
+let goLintSymbols(source: Directory!, found: [Finding!]!): [Finding!]! {
+  let rows: Map[[String!]!]! = [:]
+  found.each { f =>
+    if (complexityLinters.contains(f.rule) and !rows.has(f.path)) {
+      rows = rows.with(f.path, source.file(f.path).contents.split("\n"))
+    }
   }
-  Finding(path: path, line: line, rule: linter, message: message)
+  found.map { f =>
+    if (complexityLinters.contains(f.rule)) {
+      Finding(path: f.path, line: f.line, rule: f.rule, message: f.message + baselineNote(goSymbol(rows[f.path]!, f.line)))
+    } else {
+      f
+    }
+  }
 }
 
 let goLintIssues(source: Directory!, module: String!, output: String!): [Finding!]! {
   let label = moduleLabel(module)
-  if (!output.trimSpace.hasPrefix("{") or !output.trimSpace.hasSuffix("}")) {
-    raise "go-lint: golangci-lint output for module " + label + " is not readable JSON: " + output.trimSpace
+  let shown = output.trimSpace
+  if (!shown.hasPrefix("{") or !shown.hasSuffix("}")) {
+    raise "go-lint: golangci-lint output for module " + label + " is not readable JSON: " + shown
   }
-  let doc = readDoc(output)
-  if (doc.kindOf("") != "object" or !doc.has("Issues")) {
+  let decoded = goLintDecodeOutput(goLintDecodable(shown))
+  if (decoded.problem == "absent") {
     raise "go-lint: golangci-lint output for module " + label + " has no Issues list"
-  }
-  if (doc.kindOf("Issues") == "other" and doc.textOf("Issues") == "null") {
-    []
-  } else if (doc.kindOf("Issues") != "array") {
+  } else if (decoded.problem == "unreadable") {
     raise "go-lint: golangci-lint output for module " + label + " has an unreadable Issues list"
+  } else if (decoded.problem == "json") {
+    raise "go-lint: golangci-lint output for module " + label + " is not readable JSON: " + shown
+  } else if (decoded.failedAt >= 0) {
+    goLintRaiseIssue(module, decoded.failedAt)
   } else {
-    doc.keysOf("Issues").map { member => goLintFinding(source, module, doc, doc.childOf("Issues", member)) }
+    goLintSymbols(source, decoded.issues.map { issue, index => goLintFinding(module, issue, index) })
   }
+}
+
+let goLintProcessFindings(source: Directory!, module: String!, status: Int!, stdout: String!, stderr: String!): [Finding!]! {
+  if (status != 0) {
+    raise "go-lint: golangci-lint exited with status " + toString(status) + " in module " + moduleLabel(module) + ":\n" + stderr.trimSpace + "\n" + stdout.trimSpace
+  }
+  goLintIssues(source, module, stdout)
 }
 
 let lintModule(source: Directory!, base: Container!, module: String!): [Finding!]! {
   let ran = runGoLint(base, module)
-  let code = ran.exitCode
-  if (code != 0) {
-    raise "go-lint: golangci-lint exited with status " + toString(code) + " in module " + moduleLabel(module) + ":\n" + ran.stderr.trimSpace + "\n" + ran.stdout.trimSpace
+  goLintProcessFindings(source, module, ran.exitCode, ran.stdout, ran.stderr)
+}
+
+let joinFindings(lists: [[Finding!]!]!): [Finding!]! {
+  if (lists.length == 0) {
+    []
+  } else if (lists.length == 1) {
+    lists[0]!
+  } else {
+    let middle = lists.length / 2
+    joinFindings(lists.takeFirst(middle)) + joinFindings(lists.dropFirst(middle))
   }
-  goLintIssues(source, module, ran.stdout)
 }
 
 let goLintHits(source: Directory!, files: [String!]!): [Finding!]! {
@@ -234,7 +355,7 @@ let goLintHits(source: Directory!, files: [String!]!): [Finding!]! {
     []
   } else {
     let base = goLintBase(source)
-    modules.reduce([] :: [Finding!]!) { all, module => all + lintModule(source, base, module) }
+    joinFindings(modules.map { module => lintModule(source, base, module) })
   }
 }
 
@@ -242,16 +363,58 @@ let baselineLabel(entry: BaselineEntry!): String! {
   entry.linter + " in " + entry.path + (if (entry.symbol == "") { "" } else { " symbol " + quoted(entry.symbol) })
 }
 
-let staleBaseline(hits: [Finding!]!, settings: Settings!): [Finding!]! {
-  settings.baseline
-    .filter { entry => !hits.any { f => entry.matches(f) } }
-    .map { entry =>
-      staleFinding("stale-baseline", entry.line, "baseline entry for " + baselineLabel(entry) + " matches no finding; remove it")
+type BaselineVerdict {
+  finding: Finding!
+  matched: [Int!]!
+}
+
+let baselineKey(linter: String!, path: String!): String! {
+  linter + "\x01" + path
+}
+
+let goLintBaselined(hits: [Finding!]!, settings: Settings!): {{ remaining: [Finding!]!, stale: [Finding!]! }}! {
+  if (settings.baseline.isEmpty) {
+    let none: [Finding!]! = []
+    {{
+      remaining: hits
+      stale: none
+    }}
+  } else {
+    let entries = settings.baseline
+    let symbols = entries.map { entry => entry.symbol }
+    let buckets: Map[[Int!]!]! = [:]
+    entries.each { entry, index =>
+      let key = baselineKey(entry.linter, entry.path)
+      buckets = buckets.with(key, (buckets[key] ?? []) + [index])
     }
+    let verdicts = hits.map { f =>
+      let bucket = buckets[baselineKey(f.rule, f.path)]
+      if (bucket == null) {
+        BaselineVerdict(finding: f, matched: [])
+      } else {
+        let symbol = baselineSymbolOf(f)
+        BaselineVerdict(finding: f, matched: bucket!.filter { index => symbols[index]! == "" or symbols[index]! == symbol })
+      }
+    }
+    let used = "," + verdicts.map { v => v.matched.join(",") }.join(",") + ","
+    {{
+      remaining: verdicts.filter { v => v.matched.isEmpty }.map { v => v.finding }
+      stale: joinFindings(entries.map { entry, index =>
+        if (used.contains("," + toString(index) + ",")) {
+          []
+        } else {
+          [staleFinding("stale-baseline", entry.line, "baseline entry for " + baselineLabel(entry) + " matches no finding; remove it")]
+        }
+      })
+    }}
+  }
+}
+
+let goLintOutcomeOf(hits: [Finding!]!, settings: Settings!): [Finding!]! {
+  let baselined = goLintBaselined(hits, settings)
+  sortFindings(applyExceptions("go-lint", baselined.remaining, settings) + baselined.stale)
 }
 
 let goLintFindings(source: Directory!, files: [String!]!, settings: Settings!): [Finding!]! {
-  let hits = goLintHits(source, files)
-  let remaining = hits.filter { f => !settings.baseline.any { entry => entry.matches(f) } }
-  sortFindings(applyExceptions("go-lint", remaining, settings) + staleBaseline(hits, settings))
+  goLintOutcomeOf(goLintHits(source, files), settings)
 }

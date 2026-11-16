@@ -163,8 +163,19 @@ type Weeds {
     fail(goLintOutcome)
   }
 
+  """
+  The go-lint report for one golangci-lint process result (exit status,
+  stdout, stderr) in the named module, exactly as the check treats a real run:
+  the same validation, symbol lookup, baseline, exceptions and ordering, or the
+  same raise. For weeds-tests, which cannot make golangci-lint emit chosen
+  output.
+  """
+  pub goLintReportFromResult(module: String!, status: Int!, stdout: String!, stderr: String!): String! {
+    reportOf(goLintOutcomeOf(goLintProcessFindings(source, module, status, stdout, stderr), settings))
+  }
+
   let suppressionsOutcome: [Finding!]! {
-    applyExceptions("suppressions", suppressionHits(source, scanFiles), settings)
+    applyExceptions("suppressions", suppressionHits(scanRoot(source, ownedFolders), scanFiles), settings)
   }
 
   let goLintOutcome: [Finding!]! {

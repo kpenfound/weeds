@@ -67,21 +67,23 @@ let frontmatterName(text: String!): String! {
   }
 }
 
-let skillProblems(tree: Directory!, names: [String!]!): [String!]! {
-  let problems: [String!]! = []
-  names.each { name =>
-    if (!isRealDirectory(tree, name)) {
-      problems += ["skill " + quoted(name) + " is missing from the skill source"]
-    } else if (!isRealFile(tree, name + "/" + skillFile)) {
-      problems += ["skill " + quoted(name) + " has no " + skillFile]
+let skillProblem(tree: Directory!, name: String!): String! {
+  if (!isRealDirectory(tree, name)) {
+    "skill " + quoted(name) + " is missing from the skill source"
+  } else if (!isRealFile(tree, name + "/" + skillFile)) {
+    "skill " + quoted(name) + " has no " + skillFile
+  } else {
+    let declared = frontmatterName(tree.file(name + "/" + skillFile).contents)
+    if (declared != name) {
+      "skill " + quoted(name) + ": frontmatter name " + quoted(declared) + " must equal the folder name"
     } else {
-      let declared = frontmatterName(tree.file(name + "/" + skillFile).contents)
-      if (declared != name) {
-        problems += ["skill " + quoted(name) + ": frontmatter name " + quoted(declared) + " must equal the folder name"]
-      }
+      ""
     }
   }
-  problems
+}
+
+let skillProblems(tree: Directory!, names: [String!]!): [String!]! {
+  names.map { name => skillProblem(tree, name) }.filter { problem => problem != "" }
 }
 
 let checkSkillSource(tree: Directory!, names: [String!]!): Void {
@@ -96,33 +98,36 @@ let isOwnedFolder(source: Directory!, folder: String!): Boolean! {
   isRealDirectory(source, folder) and isRealFile(source, folder + "/" + markerFile) and isOwnerMarker(source.file(folder + "/" + markerFile).contents)
 }
 
-let installConflicts(source: Directory!, targets: [String!]!, names: [String!]!): [String!]! {
-  let found: [String!]! = []
-  targets.each { target =>
-    names.each { name =>
-      let folder = target + "/" + name
-      if (source.exists(folder, doNotFollowSymlinks: true) and !isOwnedFolder(source, folder)) {
-        found += [folder]
-      }
-    }
+let joinStrings(lists: [[String!]!]!): [String!]! {
+  if (lists.length == 0) {
+    []
+  } else if (lists.length == 1) {
+    lists[0]!
+  } else {
+    let middle = lists.length / 2
+    joinStrings(lists.takeFirst(middle)) + joinStrings(lists.dropFirst(middle))
   }
-  sortStrings(found)
+}
+
+let installConflicts(source: Directory!, targets: [String!]!, names: [String!]!): [String!]! {
+  sortStrings(joinStrings(targets.map { target =>
+    names
+      .map { name => target + "/" + name }
+      .filter { folder => source.exists(folder, doNotFollowSymlinks: true) and !isOwnedFolder(source, folder) }
+  }))
 }
 
 let unselectedFolders(source: Directory!, targets: [String!]!, names: [String!]!): [String!]! {
-  let found: [String!]! = []
-  targets.each { target =>
+  sortStrings(joinStrings(targets.map { target =>
     if (isRealDirectory(source, target)) {
-      source.entries(path: target).each { entry =>
-        let name = entry.trimSuffix("/")
-        let folder = target + "/" + name
-        if (!names.contains(name) and isOwnedFolder(source, folder)) {
-          found += [folder]
-        }
-      }
+      source.entries(path: target)
+        .map { entry => entry.trimSuffix("/") }
+        .filter { name => !names.contains(name) and isOwnedFolder(source, target + "/" + name) }
+        .map { name => target + "/" + name }
+    } else {
+      []
     }
-  }
-  sortStrings(found)
+  }))
 }
 
 let installedTree(source: Directory!, tree: Directory!, targets: [String!]!, names: [String!]!): Directory! {
@@ -155,18 +160,14 @@ let conflictFindings(conflicts: [String!]!): [Finding!]! {
 }
 
 let removedFiles(changes: Changeset!): [String!]! {
-  let files: [String!]! = []
-  changes.removedPaths.each { path =>
+  joinStrings(changes.removedPaths.map { path =>
     if (path.hasSuffix("/")) {
       let folder = path.trimSuffix("/")
-      changes.before.directory(folder).glob("**/*").filter { inner => !inner.hasSuffix("/") }.each { inner =>
-        files += [folder + "/" + inner]
-      }
+      changes.before.directory(folder).glob("**/*").filter { inner => !inner.hasSuffix("/") }.map { inner => folder + "/" + inner }
     } else {
-      files += [path]
+      [path]
     }
-  }
-  files
+  })
 }
 
 let changeFindings(changes: Changeset!): [Finding!]! {
