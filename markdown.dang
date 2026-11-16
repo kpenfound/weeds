@@ -50,19 +50,20 @@ let isAllowedMarkdown(path: String!): Boolean! {
 
 let markdownMessage = "internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist"
 
+let markdownFinding(path: String!): Finding! {
+  Finding(path: path, line: 1, rule: markdownRule, message: markdownMessage)
+}
+
 let markdownCandidates(files: [String!]!): [Finding!]! {
-  files.filter { path => isMarkdownPath(path) and !isAllowedMarkdown(path) }.map { path =>
-    Finding(path: path, line: 1, rule: markdownRule, message: markdownMessage)
-  }
+  files.filter { path => isMarkdownPath(path) and !isAllowedMarkdown(path) }.map { path => markdownFinding(path) }
 }
 
 let markdownFindings(files: [String!]!, settings: Settings!): [Finding!]! {
   let candidates = markdownCandidates(files)
-  let unlisted = candidates.filter { f => !settings.allowlist.any { glob => pathMatches(glob, f.path) } }
-  let stale = settings.allowlist
-    .filter { glob => !candidates.any { f => pathMatches(glob, f.path) } }
-    .map { glob =>
-      staleFinding("stale-allowlist", settings.allowlistLine, "markdown allowlist entry " + quoted(glob) + " matches no markdown file that needs it; remove it")
-    }
+  let split = unmatchedPaths(settings.allowlist, candidates.map { f => f.path })
+  let unlisted = split.unmatched.map { path => markdownFinding(path) }
+  let stale = split.unused.map { glob =>
+    staleFinding("stale-allowlist", settings.allowlistLine, "markdown allowlist entry " + quoted(glob) + " matches no markdown file that needs it; remove it")
+  }
   sortFindings(applyExceptions("markdown", unlisted, settings) + stale)
 }

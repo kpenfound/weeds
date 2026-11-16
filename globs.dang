@@ -1,7 +1,7 @@
 let regexSpecials = ["\\", ".", "+", "(", ")", "|", "[", "]", "{", "}", "^", "$"]
 
 let escapeRegexp(text: String!): String! {
-  text.split("").map { ch => if (regexSpecials.contains(ch)) { "\\" + ch } else { ch } }.join("")
+  regexSpecials.reduce(text) { escaped, ch => escaped.replace(ch, "\\" + ch) }
 }
 
 let globPattern(glob: String!): String! {
@@ -9,6 +9,30 @@ let globPattern(glob: String!): String! {
   "^" + body.replace("\x01", "(?:.*/)?").replace("\x02", ".*").replace("\x03", "[^/]*").replace("\x04", "[^/]") + "(?:/.*)?$"
 }
 
+let globPatterns(globs: [String!]!): [String!]! {
+  globs.map { glob => globPattern(glob) }
+}
+
+let patternMatches(pattern: String!, path: String!): Boolean! {
+  path.containsMatch(`${pattern}`)
+}
+
 let pathMatches(glob: String!, path: String!): Boolean! {
-  path.containsMatch(`${globPattern(glob)}`)
+  patternMatches(globPattern(glob), path)
+}
+
+let unmatchedPaths(globs: [String!]!, paths: [String!]!): {{ unmatched: [String!]!, unused: [String!]! }}! {
+  let patterns = globPatterns(globs)
+  let used: Map[Boolean!]! = [:]
+  let unmatched = paths.filter { path =>
+    let covered = false
+    patterns.each { pattern, index =>
+      if ((!covered or !used.has(globs[index]!)) and patternMatches(pattern, path)) {
+        covered = true
+        used = used.with(globs[index]!, true)
+      }
+    }
+    !covered
+  }
+  {{ unmatched: unmatched, unused: globs.filter { glob => !used.has(glob) } }}
 }

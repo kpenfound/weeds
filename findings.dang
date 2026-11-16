@@ -22,22 +22,19 @@ type Finding {
 }
 
 let mergeFindings(left: [Finding!]!, right: [Finding!]!): [Finding!]! {
-  let out: [Finding!]! = []
   let i = 0
   let j = 0
-  loop {
-    if (i >= left.length and j >= right.length) {
-      break
-    }
+  (left + right).map { slot =>
     if (j >= right.length or (i < left.length and !right[j]!.before(left[i]!))) {
-      out += [left[i]!]
+      let next = left[i]!
       i += 1
+      next
     } else {
-      out += [right[j]!]
+      let next = right[j]!
       j += 1
+      next
     }
   }
-  out
 }
 
 let sortFindings(findings: [Finding!]!): [Finding!]! {
