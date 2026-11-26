@@ -19,44 +19,30 @@ let suppressionMessage(directive: SuppressionDirective!): String! {
   "inline suppression " + directive.shown + " is not allowed; fix the code, or name an exception in weeds.toml"
 }
 
-let anySuppression: String! = suppressionDirectives.map { d => d.pattern }.join("|")
+# The directive patterns are written for Go's RE2, where \b and \s are ASCII.
+# ripgrep's regex engine makes them Unicode unless told otherwise, which would
+# miss a directive that follows a non-ASCII letter. Switching Unicode off for
+# the whole pattern gives ripgrep the same meaning; every other construct used
+# here (alternation, (?i:), \b, \s) means the same in both engines.
+let anySuppression: String! = "(?-u)" + suppressionDirectives.map { d => d.pattern }.join("|")
 
-type SuppressionHit {
-  path: String!
-  line: Int!
-  text: String!
-}
-
-let suppressionSearchScript = """
-set -e
-find . -xtype f -print0 | xargs -0 -r sh -c 'LC_ALL=C grep -HnaPZ -e "$0" -- "$@"; [ $? -le 1 ]' "$1" > /tmp/hits
-tr '\000' '\001' < /tmp/hits
-"""
-
-let suppressionSearch(scan: Directory!): [SuppressionHit!]! {
-  let ran = container.from(astGrepBaseImage)
-    .withDirectory("/work", scan)
-    .withWorkdir("/work")
-    .withNewFile("/search.sh", suppressionSearchScript)
-    .withExec(["sh", "/search.sh", anySuppression])
-  ran.stdout.split("\n").filter { row => row != "" }.map { row =>
-    let m = row.match(`^\./(?P<path>[^\x01]*)\x01(?P<line>[0-9]+):(?P<text>.*)$`)
-    if (m == null) {
-      raise "suppressions: unreadable search result: " + row
-    }
-    SuppressionHit(path: m!.named["path"]!, line: parseInt(m!.named["line"]!), text: m!.named["text"]!)
-  }
-}
-
-let suppressionHits(scan: Directory!, files: [String!]!): [Finding!]! {
-  if (files.isEmpty) {
+# The findings of every matched line, one per directive the line holds. The
+# search returns only lines that hold at least one directive, so the work here
+# grows with the matches, times the eight directives.
+let suppressionFindings(hits: [SearchHit!]!): [Finding!]! {
+  if (hits.isEmpty) {
     []
   } else {
-    let hits = suppressionSearch(scan)
     suppressionDirectives.map { directive =>
       hits.filter { hit => hit.text.containsMatch(`${directive.pattern}`) }.map { hit =>
         Finding(path: hit.path, line: hit.line, rule: directive.rule, message: suppressionMessage(directive))
       }
     }.reduce([] :: [Finding!]!) { all, part => all + part }
   }
+}
+
+# One workspace search for the combined pattern, through the shared file layer:
+# ignore files and the skipped locations are applied by the search itself.
+let suppressionHits(files: FileAccess!): [Finding!]! {
+  suppressionFindings(files.search(anySuppression))
 }

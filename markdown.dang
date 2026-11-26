@@ -2,6 +2,17 @@ let markdownRule = "internal-markdown"
 
 let markdownExtensions: [String!]! = [".md", ".markdown", ".mdx"]
 
+# Include globs for the markdown files, with each letter of the extension in
+# both cases: Workspace.directory include patterns are case-sensitive, and
+# isMarkdownPath matches the extension in any case.
+let caseInsensitive(text: String!): String! {
+  text.split("").map { ch =>
+    if (ch.toLower != ch.toUpper) { "[" + ch.toLower + ch.toUpper + "]" } else { ch }
+  }.join("")
+}
+
+let markdownGlobs: [String!]! = markdownExtensions.map { ext => "**/*" + caseInsensitive(ext) }
+
 let allowedMarkdownStems: [String!]! = [
   "readme"
   "agents"
@@ -54,6 +65,8 @@ let markdownFinding(path: String!): Finding! {
   Finding(path: path, line: 1, rule: markdownRule, message: markdownMessage)
 }
 
+# files are the markdown files the shared listing returns for markdownGlobs;
+# the extension test stays so that the rule never depends on the glob alone.
 let markdownCandidates(files: [String!]!): [Finding!]! {
   files.filter { path => isMarkdownPath(path) and !isAllowedMarkdown(path) }.map { path => markdownFinding(path) }
 }

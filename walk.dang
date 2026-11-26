@@ -136,8 +136,11 @@ let onlyInSecond(first: [String!]!, second: [String!]!): [String!]! {
   }
 }
 
+# Include globs of the file layer: weeds.toml-style, plus [...] character
+# classes, which Workspace.directory include patterns also read, so a case
+# variant such as .[mM][dD] selects the same files in a search and an upload.
 let anyGlob(globs: [String!]!): String! {
-  globs.map { glob => "(?:" + globPattern(glob) + ")" }.join("|")
+  globs.map { glob => "(?:" + globRegexp(glob, true) + ")" }.join("|")
 }
 
 let selectPaths(paths: [String!]!, globs: [String!]!): [String!]! {

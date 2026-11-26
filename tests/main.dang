@@ -211,6 +211,8 @@ type WeedsTests {
     sameList("a search of root text files", ["kept.txt:1"], sortRows(w.searchRows("needle", ["*.txt"])))
     sameList("a search of Go files", ["kept.go:3"], sortRows(w.searchRows("Needle", ["**/*.go"])))
     sameList("a search of two globs", ["kept.go:3", "sub/kept.txt:1"], sortRows(w.searchRows("(?i)needle", ["**/*.go", "sub/**"])))
+    sameList("a search of root text files in any case", ["kept.txt:1"], sortRows(w.searchRows("needle", ["*.[tT][xX][tT]"])))
+    sameList("the upload of Go files in any case", ["kept.go"], w.uploadedFiles(["**/*.[gG][oO]"]))
     sameList("a search of an ignored file's name", [], w.searchRows("Needle", ["rg-ignored.go", "git-ignored.txt", "build/**"]))
     sameList("the Go upload", ["kept.go"], w.uploadedFiles(["**/*.go"]))
     sameList("the Go upload's list", ["kept.go"], w.uploadList(["**/*.go"]))

@@ -178,7 +178,9 @@ type Weeds {
 
   """
   No inline suppression directive (the eight forms listed in suppressions.dang)
-  in any scanned file. Only a named weeds.toml exception clears a finding.
+  in any scanned file. One workspace search for all eight forms; only the
+  matched lines are turned into findings. Only a named weeds.toml exception
+  clears a finding.
   """
   pub suppressions: Void @check {
     fail(suppressionsOutcome)
@@ -194,7 +196,9 @@ type Weeds {
 
   """
   No internal markdown beyond the always-allowed set and the weeds.toml
-  markdown allowlist; a stale allowlist entry fails.
+  markdown allowlist; a stale allowlist entry fails. Candidates come from one
+  listing limited to .md, .markdown and .mdx files in any case, empty files
+  included.
   """
   pub markdown: Void @check {
     fail(markdownOutcome)
@@ -253,7 +257,7 @@ type Weeds {
   }
 
   let suppressionsOutcome: [Finding!]! {
-    applyExceptions("suppressions", suppressionHits(scanTree, scanFiles), settings)
+    applyExceptions("suppressions", suppressionHits(files), settings)
   }
 
   let goLintOutcome: [Finding!]! {
@@ -261,7 +265,7 @@ type Weeds {
   }
 
   let markdownOutcome: [Finding!]! {
-    markdownFindings(scanFiles, settings)
+    markdownFindings(files.listedWithEmpty(markdownGlobs), settings)
   }
 
   let reportOf(found: [Finding!]!): String! {
