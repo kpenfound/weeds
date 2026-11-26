@@ -75,9 +75,13 @@ let ignoreSourceGlobs: [String!]! = ["**/.gitignore", "**/.ignore", "**/.rgignor
 
 let ripgrepRequired = "weeds needs ripgrep (rg) on the machine that runs dagger: Workspace.search fell back to grep, which ignores .gitignore, .ignore, .rgignore and git excludes, so weeds would scan ignored files. Install ripgrep and run again."
 
-# Fails naming ripgrep when any search result lacks submatches. ripgrep reports
-# at least one submatch for every line it returns; the grep fallback reports
-# none. Takes the submatch count of each result.
+# The ripgrep decision. Fails naming ripgrep when any result of the capability
+# probe lacks submatches: ripgrep reports at least one submatch for every line
+# the probe's pattern matches, and the grep fallback reports none. Takes the
+# submatch count of each probe result. It judges the probe only. A search
+# result is never judged by its own submatches: a match of no width reports an
+# empty, all-zero submatch, and a ripgrep backend whose results lack it would
+# look like the fallback.
 let requireRipgrep(submatchCounts: [Int!]!): Void {
   if (submatchCounts.any { count => count == 0 }) {
     raise ripgrepRequired
@@ -101,6 +105,27 @@ was built from: the caller's one pass.
 type Upload {
   files: [String!]!
   tree: Directory!
+}
+
+# The listing search's pattern: the first byte of the text, in multiline mode.
+# It matches every non-empty file once, and every match consumes a byte, so
+# its submatch is never the empty, all-zero value that a zero-width match
+# such as \A reports. The byte class also matches a leading newline.
+let listingPattern = "(?s-u:\\A.)"
+
+"""
+One result of the listing search: its file and how many submatches it carried.
+"""
+type ListingRow {
+  path: String!
+  submatches: Int!
+}
+
+# The files of a listing search's results, relative to the workspace root. A
+# result is listed whatever its submatch count: the probe has made the verdict
+# on ripgrep, and a result without submatches is not evidence of the fallback.
+let listingPaths(rows: [ListingRow!]!): [String!]! {
+  rows.map { row => row.path.trimPrefix("./") }
 }
 
 # Tagged strings that sort a path's "in A" entry just before its "in B" entry,
@@ -195,10 +220,14 @@ type FileAccess {
   search of this workspace.
   """
   hostRipgrep: Boolean! {
-    let probe = workspace
+    !probeSubmatchCounts.any { count => count == 0 }
+  }
+
+  let probeSubmatchCounts: [Int!]! {
+    workspace
       .search(pattern: ".", paths: ["/"], skipIgnored: true, limit: 1)
       .{{submatches.{{start}}}}
-    !probe.any { hit => hit.submatches.length == 0 }
+      .map { hit => hit.submatches.length }
   }
 
   """
@@ -208,9 +237,7 @@ type FileAccess {
   or scan ignored files.
   """
   searchable: Workspace! {
-    if (!hostRipgrep) {
-      raise ripgrepRequired
-    }
+    requireRipgrep(probeSubmatchCounts)
     workspace
   }
 
@@ -222,8 +249,7 @@ type FileAccess {
   search(pattern: String!, globs: [String!]! = [], multiline: Boolean! = false): [SearchHit!]! {
     let found = searchable
       .search(pattern: pattern, paths: ["/"], globs: skipGlobs, skipIgnored: true, multiline: multiline)
-      .{{filePath, lineNumber, matchedLines, submatches.{{start}}}}
-    requireRipgrep(found.map { hit => hit.submatches.length })
+      .{{filePath, lineNumber, matchedLines}}
     let hits = found.map { hit =>
       SearchHit(path: hit.filePath.trimPrefix("./"), line: hit.lineNumber, text: hit.matchedLines.trimSuffix("\n"))
     }
@@ -238,14 +264,14 @@ type FileAccess {
   """
   The files every other part of the layer starts from: one search that returns
   each non-empty text file once, unsorted. Empty files and files with NUL bytes
-  are not listed because ripgrep never matches them.
+  are not listed because ripgrep never matches them. Whether ripgrep backs the
+  search is decided by searchable's probe, not by these results.
   """
   listed: [String!]! {
     let found = searchable
-      .search(pattern: "\\A", paths: ["/"], globs: skipGlobs, skipIgnored: true, multiline: true)
+      .search(pattern: listingPattern, paths: ["/"], globs: skipGlobs, skipIgnored: true, multiline: true)
       .{{filePath, submatches.{{start}}}}
-    requireRipgrep(found.map { hit => hit.submatches.length })
-    found.map { hit => hit.filePath.trimPrefix("./") }
+    listingPaths(found.map { hit => ListingRow(path: hit.filePath, submatches: hit.submatches.length) })
   }
 
   """
@@ -288,19 +314,20 @@ type FileAccess {
 
   """
   Listing helper for the files matching include globs, empty files included:
-  the files the search sees, plus the empty files that no repository ignore
-  file hides. The extra pass is a Workspace.directory listing limited to the
-  globs (ripgrep never reports an empty file) whose unlisted entries are
-  checked against ignoreSources in a small in-engine workspace holding only
-  those entries. Use narrow globs. Not honoured for an empty file: the global
-  git excludes of the machine that runs dagger, which no in-engine check can
-  read.
+  the files the shared listing returns, plus the empty files that no repository
+  ignore file hides. Ripgrep never lists an empty file, so the empty-file step
+  starts from a Workspace.directory glob limited to the include globs (a direct
+  upload, .gitignore applied, standing skips excluded) and checks the entries
+  the shared listing did not return in one in-engine listing (emptyFilesOf).
+  Together the shared listing and that step are the one pass of a check that
+  uses this helper, markdown. Use narrow globs. Not honoured for an empty file:
+  the global git excludes of the machine that runs dagger, which no in-engine
+  listing can read.
   """
   listedWithEmpty(globs: [String!]!): [String!]! {
     let seen = selectPaths(listed, globs)
     let wanted = directFiles(globs)
-    let extras = onlyInSecond(seen, wanted)
-    sortStrings(seen + emptyFilesOf(extras))
+    sortStrings(seen + emptyFilesOf(onlyInSecond(seen, wanted)))
   }
 
   let directFiles(globs: [String!]!): [String!]! {
@@ -311,11 +338,15 @@ type FileAccess {
       .filter { path => !path.hasSuffix("/") }
   }
 
-  # Of paths the search did not list, those that are empty and that no
+  # Of paths the shared listing did not return, those that are empty and that no
   # repository ignore file hides: a path is not listed either because it is
   # empty, because an ignore source hides it, or (non-empty) because a global
-  # git exclude hides it. A placeholder in each path's place shows which are
-  # hidden by an ignore source; the real files show which of the rest hold text.
+  # git exclude hides it. One in-engine listing answers both questions. It runs
+  # on a tree of two copies of the repository's ignore files, each with its own
+  # .git marker so that each applies its rules by itself: under "shown/" a
+  # placeholder in each path's place, listed unless an ignore source hides it;
+  # under "held/" the real files, listed only when they hold text. A path
+  # listed under "shown/" and not under "held/" is not hidden and holds no text.
   let emptyFilesOf(paths: [String!]!): [String!]! {
     if (paths.isEmpty) {
       []
@@ -323,9 +354,11 @@ type FileAccess {
       let rules = ignoreSources.withNewFile(".git/HEAD", "ref: refs/heads/main\n")
       let placeholders = paths.reduce(rules) { dir, path => dir.withNewFile(path, "x\n") }
       let real = rules.withDirectory("/", workspace.directory("/", include: paths.map { path => escapeGlob(path) }))
-      let notHidden = FileAccess(ws: placeholders.asWorkspace).listed
-      let withText = FileAccess(ws: real.asWorkspace).listed
-      onlyInSecond(withText, notHidden)
+      let both = directory.withDirectory("shown", placeholders).withDirectory("held", real)
+      let rows = FileAccess(ws: both.asWorkspace).listed
+      let shown = rows.filter { path => path.hasPrefix("shown/") }.map { path => path.trimPrefix("shown/") }
+      let held = rows.filter { path => path.hasPrefix("held/") }.map { path => path.trimPrefix("held/") }
+      onlyInSecond(held, shown)
     }
   }
 

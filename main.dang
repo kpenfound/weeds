@@ -131,6 +131,15 @@ type Weeds {
   }
 
   """
+  The files the listing search reports for results with these paths, for
+  weeds-tests, whatever the results' submatches are: the listing never judges
+  ripgrep from its results. The submatch counts are the shape of each result.
+  """
+  pub listedPathsOf(paths: [String!]!, submatchCounts: [Int!]!): [String!]! {
+    listingPaths(paths.map { path, position => ListingRow(path: path, submatches: submatchCounts[position] ?? 0) })
+  }
+
+  """
   The tree installed-skills and generate read, for weeds-tests: its files and
   symlinks, sorted. Only the skills directories, their agent directories and
   the root instruction files are in it.
@@ -209,9 +218,9 @@ type Weeds {
 
   """
   No internal markdown beyond the always-allowed set and the weeds.toml
-  markdown allowlist; a stale allowlist entry fails. Candidates come from one
-  listing limited to .md, .markdown and .mdx files in any case, empty files
-  included.
+  markdown allowlist; a stale allowlist entry fails. Candidates are the
+  .md, .markdown and .mdx files in any case of the shared file listing, plus
+  the empty ones no repository ignore file hides.
   """
   pub markdown: Void @check {
     fail(markdownOutcome)

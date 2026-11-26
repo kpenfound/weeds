@@ -53,6 +53,28 @@ type WeedsTests {
   }
 
   """
+  Why markdown shares the general listing rather than running its own limited
+  search. A positive glob limits a Workspace.search to markdown but
+  re-includes the ignored file. Negated globs keep ignore rules, but a negated
+  glob that matches any file with another extension also matches a directory
+  with a dotted name and skips its whole subtree, so the markdown inside is
+  never returned. Neither limits the search to markdown candidates while
+  honouring ignore rules.
+  """
+  pub markdownGlobProbes: Void @check {
+    let ws = markdownTree().asWorkspace
+    let positive = listingPaths(ws, ["**/*.[mM][dD]"])
+    expect(positive == ".github/c.md docs.v2/a.md ignored.md kept.md", "a positive markdown glob must return every non-empty markdown file, the ignored one included, got: " + positive)
+    let everything = listingPaths(ws, [])
+    expect(everything == ".git/HEAD .github/c.md .ignore Makefile build.js docs.v2/a.md kept.md sub/e.go", "without globs the search must return every non-ignored non-empty file, got: " + everything)
+    let negated = listingPaths(ws, ["!**/*.[!mM]*"])
+    expect(!negated.contains("ignored.md") and negated.contains("kept.md"), "negated globs must keep ignore rules, got: " + negated)
+    expect(!negated.contains("docs.v2/a.md") and !negated.contains(".github/c.md"), "a negated extension glob must skip a directory whose name looks like an extension, so the markdown inside is not returned, got: " + negated)
+    expect(negated.contains("Makefile"), "negated extension globs cannot exclude a file with no extension, got: " + negated)
+    null
+  }
+
+  """
   installed-skills and generate read only the skill folders: the skills
   directories with their contents, their agent directories as bare entries (a
   real directory, a symlink or a file), and AGENTS.md and CLAUDE.md. Nothing
@@ -254,6 +276,7 @@ type WeedsTests {
     expect(w.ripgrepGuard([]) == "ok", "no results must pass the ripgrep guard")
     let bare = w.ripgrepGuard([1, 0])
     expect(bare.contains("ripgrep") and bare.contains("ignore"), "results without submatches must fail naming ripgrep, got: " + bare)
+    sameList("a listing result without submatches, the shape of a match of no width, is listed and not judged", ["a.txt", "b.txt", "sub/c.txt"], w.listedPathsOf(["./a.txt", "./b.txt", "sub/c.txt"], [0, 1, 0]))
 
     let odd = directory
       .withNewFile(".git/HEAD", gitHead)

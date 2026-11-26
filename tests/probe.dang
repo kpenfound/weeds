@@ -46,8 +46,12 @@ let uploadedPaths(dir: Directory!): String! {
   sortedJoin(dir.glob("**/*").filter { p => !p.hasSuffix("/") }.map { p => p.trimPrefix("./") })
 }
 
+# The pattern of the shared listing: the first byte of the text. A match of no
+# width, such as \A, reports one all-zero submatch.
+let listingPattern = "(?s-u:\\A.)"
+
 let oneResultPerFile(ws: Workspace!): [String!]! {
-  sortRows(ws.search(pattern: "\\A", skipIgnored: true, multiline: true).{{filePath, lineNumber, submatches.{{start}}}}.map { r =>
+  sortRows(ws.search(pattern: listingPattern, skipIgnored: true, multiline: true).{{filePath, lineNumber, submatches.{{start}}}}.map { r =>
     r.filePath + ":" + toString(r.lineNumber) + ":" + toString(r.submatches.length)
   })
 }
@@ -63,5 +67,25 @@ let kindsTree(): Directory! {
 }
 
 let filesOnlyPaths(ws: Workspace!): String! {
-  sortedJoin(ws.search(pattern: "\\A", skipIgnored: true, filesOnly: true, multiline: true).{{filePath}}.map { r => r.filePath })
+  sortedJoin(ws.search(pattern: listingPattern, skipIgnored: true, filesOnly: true, multiline: true).{{filePath}}.map { r => r.filePath })
+}
+
+# A tree for the markdown-limited search probes: markdown in dotted and hidden
+# directories, an ignored markdown file, an empty one, and files of other kinds.
+let markdownTree(): Directory! {
+  directory
+    .withNewFile(".git/HEAD", gitHead)
+    .withNewFile(".ignore", "ignored.md\n")
+    .withNewFile("kept.md", "kept\n")
+    .withNewFile("ignored.md", "ignored\n")
+    .withNewFile("empty.md", "")
+    .withNewFile("docs.v2/a.md", "dotted\n")
+    .withNewFile(".github/c.md", "hidden\n")
+    .withNewFile("sub/e.go", "package sub\n")
+    .withNewFile("Makefile", "all:\n")
+    .withNewFile("build.js", "x\n")
+}
+
+let listingPaths(ws: Workspace!, globs: [String!]!): String! {
+  sortedJoin(ws.search(pattern: listingPattern, skipIgnored: true, multiline: true, globs: globs).{{filePath}}.map { r => r.filePath })
 }

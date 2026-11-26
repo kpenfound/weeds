@@ -64,10 +64,12 @@ named exception in `weeds.toml` clears a finding; no inline text does.
 
 ### markdown
 
-Markdown files (`.md`, `.markdown`, `.mdx`, in any letter case) come from one
-listing limited to those extensions, empty files included, with ignore files
-applied. They are reported under the rule `internal-markdown`, except these,
-which are always allowed:
+Markdown files (`.md`, `.markdown`, `.mdx`, in any letter case) are picked
+from the shared file listing that `comments` and `go-lint` also use, so
+`markdown` skips the same files they do. Empty markdown files, which ripgrep
+never lists, are added by one more step: a listing of the markdown files only,
+checked against the repository's ignore files. They are reported under the
+rule `internal-markdown`, except these, which are always allowed:
 
 - README, AGENTS, CLAUDE, CONTRIBUTING, LICENSE, changelog and release-notes
   files, matched on the lowercased file name without its extension, so
@@ -127,7 +129,13 @@ walks the workspace in Dang.
 
 - `suppressions` runs one `Workspace.search` for the eight directive patterns
   and turns only the matched lines into findings.
-- `markdown` takes its candidates from one listing limited to markdown files.
+- `markdown` filters the shared file list that `comments` and `go-lint` also
+  use down to markdown files, and adds the empty markdown files that no
+  repository ignore file hides. That listing and one more step, which lists
+  the markdown candidates the shared list did not return in a single in-engine
+  listing over a tree of the repository's ignore files, are markdown's one
+  pass. A non-empty file that a global exclude hid is not in the shared list,
+  so markdown skips it like the other checks.
 - `comments` and `go-lint` upload only the files their tool needs, built from
   the same search that lists the files ripgrep sees. Checks that need that
   file list share one search.
@@ -168,7 +176,9 @@ How the ignore files reach the workspace:
   laptop and a CI runner can differ, and CI decides. An empty markdown file
   hidden only by your personal global excludes is still reported, because
   ripgrep never lists an empty file and the in-engine check that closes this
-  gap for repository ignore sources cannot read them.
+  gap for repository ignore sources cannot read them. This is the only
+  global-excludes gap: a markdown file that holds text, or sits in a globally
+  excluded directory, gives no finding.
 - Ripgrep must be on the `PATH` (see Install). Dagger's `grep` fallback
   honours no ignore file, so Weeds raises an error naming ripgrep instead of
   scanning ignored files.
