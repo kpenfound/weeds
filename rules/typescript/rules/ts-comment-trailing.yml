@@ -1,0 +1,11 @@
+id: ts-comment-trailing
+language: TypeScript
+severity: hint
+message: trailing comment
+rule:
+  all:
+    - matches: ts-plain-comment
+    - follows:
+        stopBy: neighbor
+        not:
+          matches: ts-newline

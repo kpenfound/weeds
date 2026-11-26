@@ -1,0 +1,101 @@
+id: go-comment-trailing
+snapshots:
+  ? "package main\n//weeds-nl\n\n//weeds-nl\nfunc main() {\n//weeds-nl\n\tx := 1 // note\n//weeds-nl\n\t_ = x\n//weeds-nl\n}\n"
+  : labels:
+    - source: // note
+      style: primary
+      start: 69
+      end: 76
+    - source: x := 1
+      style: secondary
+      start: 62
+      end: 68
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    /* first */ // second
+    //weeds-nl
+    var x = 1
+  : labels:
+    - source: // second
+      style: primary
+      start: 45
+      end: 54
+    - source: /* first */
+      style: secondary
+      start: 33
+      end: 44
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func Run() { // note
+    //weeds-nl
+    }
+  : labels:
+    - source: // note
+      style: primary
+      start: 46
+      end: 53
+    - source: '{'
+      style: secondary
+      start: 44
+      end: 45
+  ? "package p\n//weeds-nl\n\n//weeds-nl\ntype T struct {\n//weeds-nl\n\tA int // field note\n//weeds-nl\n}\n"
+  : labels:
+    - source: // field note
+      style: primary
+      start: 67
+      end: 80
+    - source: A int
+      style: secondary
+      start: 61
+      end: 66
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    var x = 1 /* note */
+  : labels:
+    - source: /* note */
+      style: primary
+      start: 43
+      end: 53
+    - source: var x = 1
+      style: secondary
+      start: 33
+      end: 42
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    var x = 1 // TODO: later
+  : labels:
+    - source: '// TODO: later'
+      style: primary
+      start: 43
+      end: 57
+    - source: var x = 1
+      style: secondary
+      start: 33
+      end: 42
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    var x = 1 // note
+  : labels:
+    - source: // note
+      style: primary
+      start: 43
+      end: 50
+    - source: var x = 1
+      style: secondary
+      start: 33
+      end: 42

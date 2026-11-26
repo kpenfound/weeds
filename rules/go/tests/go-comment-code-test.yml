@@ -38,6 +38,70 @@ valid:
 
     //go:generate go run gen.go
     func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run returns the value, if there is one.
+    //weeds-nl
+    //
+    //weeds-nl
+    //	x := New()
+    //weeds-nl
+    //	x.Run()
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // return the value to the caller
+    //weeds-nl
+    // for each item we build a list
+    //weeds-nl
+    // if there is no match we stop
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {
+    //weeds-nl
+    	// x := 1
+    //weeds-nl
+    	// return x
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // ratio = a measure of how full the buffer is, not an assignment
+    //weeds-nl
+    // Compare a == b before use
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    //go:generate go run gen.go
+    //weeds-nl
+    func Run() {}
 invalid:
   - |
     package p
@@ -98,4 +162,100 @@ invalid:
     package p
 
     // for i := 0; i < 3; i++ {
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // func old() {
+    //weeds-nl
+    func New() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // if err != nil {
+    //weeds-nl
+    var x = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // x := compute()
+    //weeds-nl
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // fmt.Println("debug")
+    //weeds-nl
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // return err
+    //weeds-nl
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // }
+    //weeds-nl
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // var cache = map[string]int{}
+    //weeds-nl
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // type T struct {
+    //weeds-nl
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // y = 2
+    //weeds-nl
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // import "fmt"
+    //weeds-nl
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // doSomething(x);
+    //weeds-nl
+    var y = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // for i := 0; i < 3; i++ {
+    //weeds-nl
     var y = 1

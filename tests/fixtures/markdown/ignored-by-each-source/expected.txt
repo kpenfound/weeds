@@ -1,0 +1,7 @@
+.hidden/kept.md:1: internal-markdown: internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist
+empty-kept.md:1: internal-markdown: internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist
+kept.md:1: internal-markdown: internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist
+other/nested-dot.md:1: internal-markdown: internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist
+other/nested-git.md:1: internal-markdown: internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist
+other/nested-rg.md:1: internal-markdown: internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist
+sub/kept.md:1: internal-markdown: internal markdown is not allowed; delete it, or name it in the weeds.toml markdown allowlist

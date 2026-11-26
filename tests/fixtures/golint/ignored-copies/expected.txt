@@ -1,0 +1,1 @@
+kept.go:3: unused: func leftover is unused

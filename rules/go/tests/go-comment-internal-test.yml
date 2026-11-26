@@ -8,6 +8,18 @@ valid:
     package p
 
     func Run() {}
+  - |
+    //go:build linux
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {}
 invalid:
   - |
     package p
@@ -24,4 +36,30 @@ invalid:
     package main
 
     // main starts the program.
+    func main() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func run() {
+    //weeds-nl
+    	// body
+    //weeds-nl
+    }
+  - |
+    package main
+    //weeds-nl
+
+    //weeds-nl
+    // main starts the program.
+    //weeds-nl
     func main() {}

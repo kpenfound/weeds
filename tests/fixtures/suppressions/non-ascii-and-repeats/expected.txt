@@ -1,0 +1,7 @@
+main.go:3: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+main.go:4: eslint-disable: inline suppression eslint-disable is not allowed; fix the code, or name an exception in weeds.toml
+main.go:6: lint-ignore: inline suppression lint:ignore is not allowed; fix the code, or name an exception in weeds.toml
+main.go:6: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+main.go:7: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+main.go:7: noqa: inline suppression # noqa is not allowed; fix the code, or name an exception in weeds.toml
+main.go:8: eslint-disable: inline suppression eslint-disable is not allowed; fix the code, or name an exception in weeds.toml

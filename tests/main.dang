@@ -6,12 +6,118 @@ failure must contain; a leading ! marks a fragment it must not contain).
 """
 type WeedsTests {
   let fixtures: Directory!
+  let hostWorkspace: Workspace!
   let generatorSource: File!
 
   new(ws: Workspace!) {
     self.fixtures = ws.directory("/tests/fixtures")
+    self.hostWorkspace = ws
     self.generatorSource = ws.file("/skills.dang")
     self
+  }
+
+  """
+  Workspace.search and Workspace.directory on workspaces built from
+  directories, which the shared file layer is built on: without a .git entry
+  ripgrep honours .ignore and .rgignore but not .gitignore; with one it honours
+  all three, nested files included, and .git/info/exclude either way; the
+  directory upload's gitignore option reads .gitignore only; a positive search
+  glob re-includes ignored files while a negated one does not; a files-only
+  search never lists an empty file or a file with NUL bytes; a multiline search
+  for the start of the text yields one result with one submatch per non-empty
+  text file.
+  """
+  pub ignoreProbes: Void @check {
+    let plain = needleTree(directory).asWorkspace
+    let headed = needleTree(directory.withNewFile(".git/HEAD", gitHead)).asWorkspace
+    expect(searchedPaths(plain, true, []) == ".hidden.txt git-ignored.txt other/nested-git.txt plain.txt sub/git-ignored.txt sub/nested-git.txt sub/plain.txt", "without .git, search must honour .ignore and .rgignore but not .gitignore, got: " + searchedPaths(plain, true, []))
+    expect(searchedPaths(headed, true, []) == ".hidden.txt other/nested-git.txt plain.txt sub/plain.txt", "with a .git entry, search must honour .gitignore, .ignore and .rgignore, nested ones included, got: " + searchedPaths(headed, true, []))
+    expect(searchedPaths(headed, false, []).contains("git-ignored.txt") and searchedPaths(headed, false, []).contains("sub/nested-rg.txt"), "without skipIgnored, search must return ignored files")
+
+    let uploaded = uploadedPaths(plain.directory("/", gitignore: true))
+    expect(uploaded == ".gitignore .hidden.txt .ignore .rgignore dot-ignored.txt other/nested-git.txt plain.txt rg-ignored.txt sub/.gitignore sub/.ignore sub/.rgignore sub/nested-dot.txt sub/nested-rg.txt sub/plain.txt", "the upload's gitignore option must apply .gitignore files only, got: " + uploaded)
+
+    let excluded = excludeTree(directory.withNewFile(".git/HEAD", gitHead))
+    expect(searchedPaths(excluded.asWorkspace, true, []) == "control.txt", "search must honour .git/info/exclude, got: " + searchedPaths(excluded.asWorkspace, true, []))
+    expect(searchedPaths(excludeTree(directory).asWorkspace, true, []) == "control.txt", "search must honour .git/info/exclude without a HEAD file, got: " + searchedPaths(excludeTree(directory).asWorkspace, true, []))
+    let excludedUpload = uploadedPaths(excluded.asWorkspace.directory("/", gitignore: true))
+    expect(excludedUpload.contains("excluded.txt") and excludedUpload.contains("sub/excluded-sub.txt"), "the upload's gitignore option must not apply .git/info/exclude, got: " + excludedUpload)
+
+    let included = searchedPaths(headed, true, ["*.txt"])
+    expect(included.contains("git-ignored.txt") and included.contains("sub/nested-rg.txt"), "a positive search glob must re-include ignored files, got: " + included)
+    expect(searchedPaths(headed, true, ["!sub/**"]) == ".hidden.txt other/nested-git.txt plain.txt", "a negated search glob must keep ignore rules, got: " + searchedPaths(headed, true, ["!sub/**"]))
+
+    expect(filesOnlyPaths(kindsTree().asWorkspace) == "newline.txt nonl.txt text.txt", "a files-only search must skip empty files and files with NUL bytes, got: " + filesOnlyPaths(kindsTree().asWorkspace))
+    sameList("the one-result-per-file search", ["newline.txt:1:1", "nonl.txt:1:1", "text.txt:1:1"], oneResultPerFile(kindsTree().asWorkspace))
+    null
+  }
+
+  """
+  Why markdown shares the general listing rather than running its own limited
+  search. A positive glob limits a Workspace.search to markdown but
+  re-includes the ignored file. Negated globs keep ignore rules, but a negated
+  glob that matches any file with another extension also matches a directory
+  with a dotted name and skips its whole subtree, so the markdown inside is
+  never returned. Neither limits the search to markdown candidates while
+  honouring ignore rules.
+  """
+  pub markdownGlobProbes: Void @check {
+    let ws = markdownTree().asWorkspace
+    let positive = listingPaths(ws, ["**/*.[mM][dD]"])
+    expect(positive == ".github/c.md docs.v2/a.md ignored.md kept.md", "a positive markdown glob must return every non-empty markdown file, the ignored one included, got: " + positive)
+    let everything = listingPaths(ws, [])
+    expect(everything == ".git/HEAD .github/c.md .ignore Makefile build.js docs.v2/a.md kept.md sub/e.go", "without globs the search must return every non-ignored non-empty file, got: " + everything)
+    let negated = listingPaths(ws, ["!**/*.[!mM]*"])
+    expect(!negated.contains("ignored.md") and negated.contains("kept.md"), "negated globs must keep ignore rules, got: " + negated)
+    expect(!negated.contains("docs.v2/a.md") and !negated.contains(".github/c.md"), "a negated extension glob must skip a directory whose name looks like an extension, so the markdown inside is not returned, got: " + negated)
+    expect(negated.contains("Makefile"), "negated extension globs cannot exclude a file with no extension, got: " + negated)
+    null
+  }
+
+  """
+  The shared listing yields each path once, whatever the backend returns: a
+  backend that reports one result per line of a file, or the same path with and
+  without a leading "./", gives the same list as one result per file.
+  """
+  pub listingRepeats: Void @check {
+    let w = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
+    let once = ["a.go", "b/c.go", "d.txt"]
+    sameList("one result per file", once, w.listedPathsOf(["d.txt", "./a.go", "b/c.go"]))
+    sameList("one result per line", once, w.listedPathsOf(["a.go", "a.go", "a.go", "b/c.go", "b/c.go", "d.txt", "a.go", "d.txt"]))
+    sameList("with and without ./", once, w.listedPathsOf(["./a.go", "a.go", "./b/c.go", "b/c.go", "./d.txt", "./d.txt", "d.txt"]))
+    sameList("no results", [], w.listedPathsOf([]))
+    sameList("one result", ["a.go"], w.listedPathsOf(["./a.go"]))
+    null
+  }
+
+  """
+  installed-skills and generate read only the skill folders: the skills
+  directories with their contents, their agent directories as bare entries (a
+  real directory, a symlink or a file), and AGENTS.md and CLAUDE.md. Nothing
+  else in the workspace is in their tree, ignored or not, and a changeset
+  between two trees built on it applies at the workspace root with the same
+  paths.
+  """
+  pub skillView: Void @check {
+    let tree = directory
+      .withNewFile("AGENTS.md", "x\n")
+      .withNewFile("README.md", "x\n")
+      .withNewFile("src/main.go", "x\n")
+      .withNewFile(".gitignore", ".cursor/skills\n")
+      .withNewFile(".agents/other/f.txt", "x\n")
+      .withNewFile(".agents/skills/a/SKILL.md", "x\n")
+      .withNewFile(".claude/other.txt", "x\n")
+      .withNewFile(".cursor/real.txt", "x\n")
+      .withNewFile(".cursor/skills/b/SKILL.md", "x\n")
+      .withNewFile("elsewhere/f.txt", "x\n")
+      .withSymlink("elsewhere", ".gemini")
+      .withNewFile(".github/workflows/ci.yml", "x\n")
+      .withNewFile(".github/skills", "file\n")
+      .withNewFile(".opencode/x", "x\n")
+      .withSymlink("../.agents/skills", ".opencode/skills")
+    let expected = ["AGENTS.md", ".agents/", ".agents/skills/", ".agents/skills/a/", ".agents/skills/a/SKILL.md", ".claude/", ".cursor/", ".cursor/skills/", ".cursor/skills/b/", ".cursor/skills/b/SKILL.md", ".gemini", ".github/", ".github/skills", ".opencode/", ".opencode/skills"]
+    sameList("the skill view", sortRows(expected), weeds(ws: tree.asWorkspace).skillViewEntries)
+    null
   }
 
   """
@@ -72,6 +178,20 @@ type WeedsTests {
     expect(shared.sortedFindings(expected) == expected, "sorted findings must stay as they are")
     let rejected = { shared.sortedFindings("not a finding"); "accepted" } rescue { err: Error => err.message }
     expect(rejected.contains("not a finding line"), "a malformed line must be rejected, got: " + rejected)
+
+    let inOrder = ["a", "a-b", "a/b", "b"].map { path =>
+      [1, 2, 9, 10, 100].map { line =>
+        ["alpha", "alpha2", "beta"].map { rule =>
+          ["m", "m2"].map { message =>
+            let row = path + ":" + toString(line) + ": " + rule + ": " + message
+            if (line == 9) { row + "\n" + row } else { row }
+          }.join("\n")
+        }.join("\n")
+      }.join("\n")
+    }.join("\n").split("\n")
+    let shuffled = scaleRange(inOrder.length).map { slot, i => inOrder[(i * 37 + 11) % inOrder.length]! }
+    expect(shuffled.join("\n") != inOrder.join("\n"), "the shuffle must change the order")
+    sameText("the findings sorted from a shuffled input", inOrder.join("\n"), shared.sortedFindings(shuffled.join("\n")))
     null
   }
 
@@ -92,9 +212,9 @@ type WeedsTests {
   }
 
   """
-  The shared scanning walk skips .git, vendor, node_modules and Weeds-owned
-  skill folders, yields hidden and gitignored files, and leaves the module's
-  workspace whole.
+  The scanning listing skips .git, vendor, node_modules and Weeds-owned skill
+  folders, lists hidden files and leaves out files an ignore file matches, and
+  the module's workspace stays whole.
   """
   pub walk: Void @check {
     let marker = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).ownerMarker
@@ -116,15 +236,152 @@ type WeedsTests {
       .withNewFile("src/main.go", "package main\n")
     let w = weeds(ws: tree.asWorkspace)
     let walked = w.scanFiles.join("\n")
-    let expected = ".agents/skills/unmarked/SKILL.md\n.claude/skills/imposter/.weeds-managed\n.claude/skills/imposter/SKILL.md\n.gitignore\n.hidden/file.txt\nignored.log\nsrc/main.go"
-    expect(walked == expected, "the walk must skip .git, vendor, node_modules and owned skill folders only; got:\n" + walked)
+    let expected = ".agents/skills/unmarked/SKILL.md\n.claude/skills/imposter/.weeds-managed\n.claude/skills/imposter/SKILL.md\n.gitignore\n.hidden/file.txt\nsrc/main.go"
+    expect(walked == expected, "the walk must skip .git, vendor, node_modules, owned skill folders and ignored files; got:\n" + walked)
     expect(w.scanFiles.join("\n") == walked, "walking twice must give identical output")
     expect(w.ownedFolders == [".agents/skills/owned"], "only a folder with a valid marker is owned, got: " + w.ownedFolders.join(", "))
     expect(w.source.file(".agents/skills/owned/.weeds-managed").contents == marker, "the workspace must keep the owned marker")
     expect(w.source.file(".agents/skills/owned/SKILL.md").contents == "skill\n", "the workspace must keep owned skill files")
     expect(w.source.file(".agents/skills/owned/refs/deep.md").contents == "deep\n", "the workspace must keep owned nested files")
+    expect(w.source.file("ignored.log").contents == "ignored\n", "the workspace must keep ignored files")
     expect(w.source.exists(".git/config") and w.source.exists("vendor/pkg/a.go") and w.source.exists("node_modules/m/index.js"), "the workspace must keep .git, vendor and node_modules")
     null
+  }
+
+  """
+  A file matched by .gitignore, .ignore, .rgignore, a nested ignore file or
+  .git/info/exclude is left out of the listing, of search results and of an
+  upload, which all hold the same files. Hidden files that are not ignored,
+  and the ignore files themselves, stay. The skipped names and an owned skill
+  folder stay out too.
+  """
+  pub scanIgnored: Void @check {
+    let w = ignoreSubject
+    let listed = [".gitignore", ".hidden/kept.txt", ".ignore", ".rgignore", "kept.go", "kept.txt", "other/nested-git.txt", "sub/.gitignore", "sub/.ignore", "sub/.rgignore", "sub/kept.txt"]
+    expect(listed.length > 0 and w.scanFiles.length == listed.length, "the scan of a fixture with known files must not be empty")
+    sameList("scanFiles", listed, w.scanFiles)
+    sameList("the files of a search for any character", listed, sortRows(w.searchRows(".", []).map { row => row.split(":")[0]! }.uniq))
+    sameList("the files in the upload", listed, w.uploadedFiles([]))
+    sameList("the files the upload was built from", listed, w.uploadList([]))
+    expect(w.ownedFolders == [".agents/skills/owned"], "the owned skill folder must be found from its marker, got: " + w.ownedFolders.join(", "))
+    null
+  }
+
+  """
+  The search helper returns only lines in files that match its include globs,
+  and the upload helper only files that match them, each with ignore files
+  applied. A glob-restricted search or upload does not evaluate scanFiles.
+  """
+  pub fileLayer: Void @check {
+    let w = ignoreSubject
+    sameList("a search for needle", [".hidden/kept.txt:1", "kept.txt:1", "other/nested-git.txt:1", "sub/kept.txt:1"], sortRows(w.searchRows("needle", [])))
+    sameList("a search under sub", ["sub/kept.txt:1"], sortRows(w.searchRows("needle", ["sub/**"])))
+    sameList("a search of root text files", ["kept.txt:1"], sortRows(w.searchRows("needle", ["*.txt"])))
+    sameList("a search of Go files", ["kept.go:3"], sortRows(w.searchRows("Needle", ["**/*.go"])))
+    sameList("a search of two globs", ["kept.go:3", "sub/kept.txt:1"], sortRows(w.searchRows("(?i)needle", ["**/*.go", "sub/**"])))
+    sameList("a search of root text files in any case", ["kept.txt:1"], sortRows(w.searchRows("needle", ["*.[tT][xX][tT]"])))
+    sameList("the upload of Go files in any case", ["kept.go"], w.uploadedFiles(["**/*.[gG][oO]"]))
+    sameList("a search of an ignored file's name", [], w.searchRows("Needle", ["rg-ignored.go", "git-ignored.txt", "build/**"]))
+    sameList("the Go upload", ["kept.go"], w.uploadedFiles(["**/*.go"]))
+    sameList("the Go upload's list", ["kept.go"], w.uploadList(["**/*.go"]))
+    sameList("the text upload", [".hidden/kept.txt", "kept.txt", "other/nested-git.txt", "sub/kept.txt"], w.uploadedFiles(["**/*.txt"]))
+    sameList("the hidden upload", [".hidden/kept.txt"], w.uploadedFiles([".hidden/**"]))
+    sameList("an upload no file matches", [], w.uploadedFiles(["**/*.rs"]))
+    expect(w.hostHasRipgrep, "the engine-side search of a fixture workspace must be backed by ripgrep")
+    expect(w.ripgrepGuard([1, 3, 1]) == "ok", "results with submatches must pass the ripgrep guard")
+    expect(w.ripgrepGuard([]) == "ok", "no results must pass the ripgrep guard")
+    let bare = w.ripgrepGuard([1, 0])
+    expect(bare.contains("ripgrep") and bare.contains("ignore"), "results without submatches must fail naming ripgrep, got: " + bare)
+    sameList("a listing result without submatches, the shape of a files-only search, is listed and not judged", ["a.txt", "b.txt", "sub/c.txt"], w.listedPathsOf(["./a.txt", "./b.txt", "sub/c.txt"]))
+
+    let odd = directory
+      .withNewFile(".git/HEAD", gitHead)
+      .withNewFile(".gitignore", "a1.txt\nweird.txt\nqx.txt\nd1.txt\n")
+      .withNewFile("a[1].txt", "x\n").withNewFile("a1.txt", "x\n")
+      .withNewFile("we*ird.txt", "x\n").withNewFile("weird.txt", "x\n")
+      .withNewFile("q?.txt", "x\n").withNewFile("qx.txt", "x\n")
+      .withNewFile("d{1}.txt", "x\n").withNewFile("d1.txt", "x\n")
+      .withNewFile("!bang.txt", "x\n")
+      .withNewFile("sp ace.txt", "x\n")
+      .withNewFile("back\\slash.txt", "x\n")
+      .withNewFile("sub/#hash.txt", "x\n")
+    let oddFiles = ["!bang.txt", ".gitignore", "a[1].txt", "back\\slash.txt", "d{1}.txt", "q?.txt", "sp ace.txt", "sub/#hash.txt", "we*ird.txt"]
+    sameList("the listing of odd names", oddFiles, weeds(ws: odd.asWorkspace).scanFiles)
+    sameList("the upload of odd names, which must not match ignored look-alikes", oddFiles, weeds(ws: odd.asWorkspace).uploadedFiles([]))
+    null
+  }
+
+  """
+  The listing helper includes the empty files that the search never lists, but
+  not one an ignore file or .git/info/exclude hides, nor a text file hidden
+  that way: markdown candidates from every repository ignore source. The
+  upload helper's support files bring in files the search never lists (empty
+  or binary) from a direct upload with .gitignore applied.
+  """
+  pub listedWithEmpty: Void @check {
+    let w = weeds(ws: markdownWorkspace.asWorkspace)
+    sameList("the markdown listing", [".hidden/empty.md", "empty.md", "kept.md", "sub/empty.md"], w.listedFiles(["**/*.md"]))
+    sameList("the listing under sub", ["sub/.gitignore", "sub/.ignore", "sub/.rgignore", "sub/empty.md", "sub/kept.txt"], w.listedFiles(["sub/**"]))
+    sameList("the markdown listing under sub", ["sub/empty.md"], w.listedFiles(["sub/*.md"]))
+    sameList("a listing no file matches", [], w.listedFiles(["**/*.rs"]))
+    sameList("the upload without support", ["kept.go"], w.uploadedFiles(["**/*.go"]))
+    sameList("the upload with support files", ["data/blob.bin", "data/empty.dat", "kept.go"], w.supportUploadedFiles(["**/*.go"], ["data/**"]))
+    sameList("the support upload leaves out gitignored files", ["kept.go"], w.supportUploadedFiles(["**/*.go"], ["build/**"]))
+    null
+  }
+
+  let markdownWorkspace: Directory! {
+    ignoreWorkspace
+      .withNewFile("kept.md", "text\n")
+      .withNewFile("empty.md", "")
+      .withNewFile("sub/empty.md", "")
+      .withNewFile(".hidden/empty.md", "")
+      .withNewFile("dot-ignored.md", "")
+      .withNewFile("git-ignored.md", "")
+      .withNewFile("rg-ignored.md", "")
+      .withNewFile("info-excluded.md", "")
+      .withNewFile("sub/nested-dot.md", "")
+      .withNewFile("sub/nested-git.md", "")
+      .withNewFile("sub/nested-rg.md", "")
+      .withNewFile("build/empty.md", "")
+      .withNewFile("vendor/empty.md", "")
+      .withNewFile("node_modules/empty.md", "")
+      .withNewFile("data/empty.dat", "")
+      .withNewFile("data/blob.bin", "\u0000\u0001")
+  }
+
+  let ignoreSubject: Weeds! {
+    weeds(ws: ignoreWorkspace.asWorkspace)
+  }
+
+  let ignoreWorkspace: Directory! {
+    let marker = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).ownerMarker
+    materialize(fixtures.directory("ignore-probe"))
+      .withNewFile(".git/config", "git\n")
+      .withNewFile(".agents/skills/owned/SKILL.md", "needle\n")
+      .withNewFile(".agents/skills/owned/.weeds-managed", marker)
+  }
+
+  """
+  What a workspace on this machine's disk gives: the files of an upload and
+  the files of a search, with ignore rules applied, for the manual
+  global-excludes evidence kept under tests/fixtures/ignore-probe. Run it from a
+  scratch workspace.
+  """
+  pub rawHost(pattern: String!, glob: String!): String! {
+    let globs = if (glob == "") { [] :: [String!]! } else { [glob] }
+    hostWorkspace.search(pattern: pattern, skipIgnored: true, globs: globs).{{filePath, submatches.{{start}}}}.map { r => r.filePath + "[" + toString(r.submatches.length) + "]" }.join(" ")
+  }
+
+  """
+  The same workspace through the search helper, the shared upload helper and a
+  plain Workspace.directory upload with its gitignore option, for the manual
+  global-excludes evidence. Run it from a scratch workspace.
+  """
+  pub hostIgnoreReport(pattern: String!): String! {
+    let w = weeds(ws: hostWorkspace)
+    let plain = sortRows(hostWorkspace.directory("/", include: ["**/*.dat"], gitignore: true).glob("**/*").map { path => path.trimPrefix("./") }.filter { path => !path.hasSuffix("/") })
+    "search: " + w.searchRows(pattern, []).join(" ") + "\nshared upload: " + w.uploadedFiles(["**/*.dat"]).join(" ") + "\nplain upload with gitignore: " + plain.join(" ")
   }
 
   """
@@ -176,54 +433,54 @@ type WeedsTests {
   }
 
   """
-  The comments check's Dang logic (precedence, headers, adjacency, rule
-  registration) on in-memory ast-grep matches.
+  The comments check's Dang logic on in-memory ast-grep matches (lines count
+  from 0 in the original file): which rule wins when several match one
+  comment, how the trailing and blank-line violations are reported, licence
+  headers, generated files, and rule registration.
   """
   pub commentLogic: Void @check {
     let shared = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
 
-    let unknown = { shared.classifyComments("a.go", "package a\n", sgMatches([sgMatch("go-comment-made-up", 0, 0, 0)])); "accepted" } rescue { err: Error => err.message }
+    let unknown = { shared.classifyComments("a.go", sgMatches([sgMatch("go-comment-made-up", 0, 0)])); "accepted" } rescue { err: Error => err.message }
     expect(unknown.contains("go-comment-made-up") and unknown.contains("not registered"), "an unregistered rule id must fail loudly, got: " + unknown)
-    expect(shared.classifyComments("a.go", "package a\n// c\n", sgMatches([sgMatch("unused-suppression", 1, 0, 1)])) == "", "ast-grep's built-in unused-suppression must be ignored")
+    expect(shared.classifyComments("a.go", sgMatches([sgMatch("unused-suppression", 1, 0)])) == "", "ast-grep's built-in unused-suppression must be ignored")
+    expect(shared.classifyComments("a.go", "[]") == "", "a file whose comments all comply has no match and no finding")
 
-    let layers = sgMatches([sgMatch("go-comment-not-doc", 1, 0, 1), sgMatch("go-doc-candidate", 1, 0, 1), sgMatch("go-comment-main", 1, 0, 1)])
-    expect(shared.classifyComments("a.go", "package main\n// c\nvar x = 1\n", layers) == "a.go:2: go-comment-main: comment in package main", "one comment must give one finding, the most specific rule winning")
-    let todoWins = sgMatches([sgMatch("go-comment-main", 1, 0, 1), sgMatch("go-comment-todo", 1, 0, 1)])
-    expect(shared.classifyComments("a.go", "package main\n// TODO c\n", todoWins).contains("go-comment-todo"), "TODO must win over a location rule")
+    let layers = sgMatches([sgMatch("go-comment-blank-line", 1, 0), sgMatch("go-comment-not-doc", 1, 0), sgMatch("go-comment-main", 1, 0)])
+    expect(shared.classifyComments("a.go", layers) == "a.go:2: go-comment-main: comment in package main", "one comment must give one finding, the most specific rule winning")
+    let notDocWins = sgMatches([sgMatch("go-comment-blank-line", 1, 0), sgMatch("go-comment-not-doc", 1, 0)])
+    expect(shared.classifyComments("a.go", notDocWins) == "a.go:2: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier", "not-doc must win over the blank-line violation")
+    let todoWins = sgMatches([sgMatch("go-comment-main", 1, 0), sgMatch("go-comment-todo", 1, 0), sgMatch("go-comment-trailing", 1, 0)])
+    expect(shared.classifyComments("a.go", todoWins) == "a.go:2: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note", "TODO must win over a location rule and the trailing rule, got: " + shared.classifyComments("a.go", todoWins))
+    let twoOnALine = sgMatches([sgMatch("go-comment-main", 1, 0), sgMatch("go-comment-trailing", 1, 12)])
+    expect(shared.classifyComments("a.go", twoOnALine) == "a.go:2: go-comment-detached: trailing comment\na.go:2: go-comment-main: comment in package main", "each comment on a line is judged by its own matches")
+    let trailingWins = sgMatches([sgMatch("go-comment-main", 1, 12), sgMatch("go-comment-trailing", 1, 12), sgMatch("go-comment-not-doc", 1, 12)])
+    expect(shared.classifyComments("a.go", trailingWins) == "a.go:2: go-comment-detached: trailing comment", "a trailing comment is detached whatever else it breaks, got: " + shared.classifyComments("a.go", trailingWins))
 
-    let attached = shared.classifyComments("a.go", "package a\n// Doc.\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
-    expect(attached == "", "an adjacent doc comment passes, got: " + attached)
-    let gap = shared.classifyComments("a.go", "package a\n// Doc.\n\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
+    let gap = shared.classifyComments("a.go", sgMatches([sgMatch("go-comment-blank-line", 1, 0)]))
     expect(gap == "a.go:2: go-comment-detached: doc comment is separated from its declaration by a blank line", "a blank line detaches a doc comment, got: " + gap)
-    let viaDirective = shared.classifyComments("a.go", "package a\n// Doc.\n//go:noinline\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
-    expect(viaDirective == "", "a directive line must not detach a doc comment, got: " + viaDirective)
-    let directiveThenGap = shared.classifyComments("a.go", "package a\n// Doc.\n//go:noinline\n\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
-    expect(directiveThenGap.contains("go-comment-detached"), "a blank line after the directive still detaches, got: " + directiveThenGap)
-    let blockDoc = shared.classifyComments("a.ts", "/**\n * Doc.\n */\nexport const a = 1;\n", sgMatches([sgMatch("ts-doc-candidate", 0, 0, 2)]))
-    expect(blockDoc == "", "a multi-line doc block directly above its declaration passes, got: " + blockDoc)
-    let blockGap = shared.classifyComments("a.ts", "/**\n * Doc.\n */\n\nexport const a = 1;\n", sgMatches([sgMatch("ts-doc-candidate", 0, 0, 2)]))
-    expect(blockGap == "a.ts:1: ts-comment-detached: doc comment is separated from its declaration by a blank line", "a doc block is judged from its last line, got: " + blockGap)
-    let trailing = shared.classifyComments("a.go", "package a\nvar A = 1 // note\n", sgMatches([sgMatch("go-doc-candidate", 1, 12, 1)]))
+    let blockGap = shared.classifyComments("a.ts", sgMatches([sgMatch("ts-comment-blank-line", 0, 0)]))
+    expect(blockGap == "a.ts:1: ts-comment-detached: doc comment is separated from its declaration by a blank line", "a doc block is reported at its first line, got: " + blockGap)
+    let trailing = shared.classifyComments("a.go", sgMatches([sgMatch("go-comment-trailing", 1, 12)]))
     expect(trailing == "a.go:2: go-comment-detached: trailing comment", "a trailing comment is detached, got: " + trailing)
 
-    let licence = "// Copyright 2024 Example Corp.\n// Licensed under MIT.\n\npackage main\n"
-    let headerMatches = sgMatches([sgMatch("go-comment-main", 0, 0, 0), sgMatch("go-comment-main", 1, 0, 1)])
-    expect(shared.classifyComments("a.go", licence, headerMatches) == "", "a licence header passes in package main")
-    let plain = "// Notes about the licence of this file.\n// More notes.\n\npackage main\n"
-    expect(shared.classifyComments("a.go", plain, headerMatches).contains("go-comment-main"), "a header without a licence or copyright line is not a licence header")
-    let headerTodo = "// Copyright 2024 Example Corp.\n// TODO: year.\n\npackage main\n"
-    expect(shared.classifyComments("a.go", headerTodo, sgMatches([sgMatch("go-comment-todo", 1, 0, 1), sgMatch("go-comment-main", 1, 0, 1)])) == "a.go:2: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note", "a TODO inside a licence header is reported")
-    let tsHeader = "/*\n * Copyright 2024 Example Corp.\n */\n\nexport const a = 1;\n"
-    expect(shared.classifyComments("a.ts", tsHeader, sgMatches([sgMatch("ts-comment-not-doc", 0, 0, 2)])) == "", "a block licence header passes")
+    let header = sgMatches([sgMatch("go-comment-main", 0, 0), sgMatch("go-comment-main", 1, 0), sgMatch("go-licence-header", 0, 0), sgMatch("go-licence-header", 1, 0)])
+    expect(shared.classifyComments("a.go", header) == "", "a licence header passes in package main")
+    let beyondHeader = sgMatches([sgMatch("go-comment-main", 3, 0), sgMatch("go-licence-header", 0, 0), sgMatch("go-licence-header", 1, 0)])
+    expect(shared.classifyComments("a.go", beyondHeader) == "a.go:4: go-comment-main: comment in package main", "only the lines of the header are exempt")
+    let headerTodo = sgMatches([sgMatch("go-comment-todo", 1, 0), sgMatch("go-comment-main", 1, 0), sgMatch("go-licence-header", 0, 0), sgMatch("go-licence-header", 1, 0)])
+    expect(shared.classifyComments("a.go", headerTodo) == "a.go:2: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note", "a TODO inside a licence header is reported")
+    let headerTrailing = sgMatches([sgMatch("ts-comment-trailing", 0, 4), sgMatch("ts-licence-header", 0, 4)])
+    expect(shared.classifyComments("a.ts", headerTrailing) == "", "a licence header comment is exempt from the trailing rule")
 
-    let generated = sgMatches([sgMatch("go-comment-todo", 2, 0, 2), sgMatch("go-comment-not-doc", 3, 0, 3)])
-    expect(shared.classifyComments("g.go", "// Code generated by tool; DO NOT EDIT.\n\n// TODO x\n// c\npackage g\n", generated) == "", "a generated Go file has no findings")
-    expect(shared.classifyComments("g.go", "package g\n// Code generated by tool; DO NOT EDIT.\n// TODO x\n", sgMatches([sgMatch("go-comment-todo", 2, 0, 2)])) != "", "the generated marker only counts before the first code line")
-    expect(shared.classifyComments("g.ts", "// @generated\n// TODO x\nexport const a = 1;\n", sgMatches([sgMatch("ts-comment-todo", 1, 0, 1)])) == "", "a generated TS file has no findings")
-    expect(shared.classifyComments("g.ts", "// generated by the api tool\n// TODO x\nexport const a = 1;\n", sgMatches([sgMatch("ts-comment-todo", 1, 0, 1)])) == "", "a 'generated by' TS file has no findings")
+    let generated = sgMatches([sgMatch("go-generated-file", 0, 0), sgMatch("go-comment-todo", 2, 0), sgMatch("go-comment-not-doc", 3, 0)])
+    expect(shared.classifyComments("g.go", generated) == "", "a generated Go file has no findings")
+    expect(shared.classifyComments("g.ts", sgMatches([sgMatch("ts-comment-todo", 1, 0), sgMatch("ts-generated-file", 0, 0)])) == "", "a generated TS file has no findings")
+    expect(shared.classifyComments("g.go", sgMatches([sgMatch("go-comment-todo", 2, 0)])) != "", "without a generated-file match a TODO is reported")
+    expect(shared.classifyComments("g.go", sgMatches([sgMatch("go-generated-file", 0, 0), sgMatch("go-licence-header", 1, 0)])) == "", "facts about a file are not findings")
 
-    let ignored = shared.classifyComments("a.go", "package a\n// ast-grep-ignore\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
-    expect(ignored == "a.go:2: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier", "an ast-grep-ignore directive is never a doc comment, got: " + ignored)
+    let ignored = shared.classifyComments("a.go", sgMatches([sgMatch("go-comment-not-doc", 1, 0)]))
+    expect(ignored == "a.go:2: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier", "a not-doc comment is reported under go-comment-not-doc, got: " + ignored)
     null
   }
 
@@ -261,12 +518,12 @@ type WeedsTests {
     let scanned = shared.commentScanRules
     (ruleIdsOf(goRules) + ruleIdsOf(typescriptRules)).each { id =>
       if (!scanned.contains(id)) {
-        problems += ["rule " + id + " is not registered in registry.dang (commentsRules or commentMarkerRules)"]
+        problems += ["rule " + id + " is not registered in registry.dang (commentsRules) or comments.dang (commentDetectorRules)"]
       }
     }
-    shared.registeredCommentRules.each { id =>
+    scanned.each { id =>
       if (!id.hasSuffix("-detached") and !ruleIdsOf(goRules).contains(id) and !ruleIdsOf(typescriptRules).contains(id)) {
-        problems += ["registered comments rule " + id + " has no rule file"]
+        problems += ["scanned comments rule " + id + " has no rule file"]
       }
     }
     if (!problems.isEmpty) {
@@ -320,7 +577,8 @@ type WeedsTests {
 
   """
   go-lint runs once per go.mod outside vendor, testdata and node_modules,
-  skipping a module that holds no Go files.
+  skipping a module that holds no Go files and one that lives only in a
+  directory an ignore file, .git/info/exclude or .gitignore leaves out.
   """
   pub golintModules: Void @check {
     let tree = directory
@@ -343,8 +601,64 @@ type WeedsTests {
       .withNewFile("outer/go.mod", "module outer\n")
       .withNewFile("outer/inner/go.mod", "module inner\n")
       .withNewFile("outer/inner/i.go", "package inner\n")
-    let modules = weeds(ws: tree.asWorkspace).goLintModules.join(",")
-    expect(modules == ".,a,a/b,outer/inner", "go-lint must lint each module that holds Go files, once; got: " + modules)
+      .withNewFile(".gitignore", "worktrees/\n")
+      .withNewFile(".rgignore", "scratch/\n")
+      .withNewFile("worktrees/copy/go.mod", "module copy\n")
+      .withNewFile("worktrees/copy/c.go", "package copy\n")
+      .withNewFile("scratch/go.mod", "module scratch\n")
+      .withNewFile("scratch/s.go", "package scratch\n")
+      .withNewFile("a/.ignore", "hidden/\n")
+      .withNewFile("a/hidden/go.mod", "module hidden\n")
+      .withNewFile("a/hidden/h.go", "package hidden\n")
+      .withNewFile(".git/info/exclude", "private/\n")
+      .withNewFile("private/go.mod", "module private\n")
+      .withNewFile("private/p.go", "package private\n")
+    let modules = weeds(ws: gitMarked(tree).asWorkspace).goLintModules.join(",")
+    expect(modules == ".,a,a/b,outer/inner", "go-lint must lint each module that holds Go files, once, and none that only an ignored directory holds; got: " + modules)
+    null
+  }
+
+  """
+  The tree go-lint uploads holds the Go sources and module files that the file
+  layer lists and the other files of the modules, and none of the files an
+  ignore file, .git/info/exclude, vendor or node_modules leaves out: not an
+  ignored copy of a module, its go.mod or its Go files.
+  """
+  pub golintUpload: Void @check {
+    let tree = directory
+      .withNewFile("go.mod", "module root\n")
+      .withNewFile("go.sum", "x\n")
+      .withNewFile("main.go", "package main\n")
+      .withNewFile("data/blob.bin", "\x01\x02")
+      .withNewFile("data/empty.dat", "")
+      .withNewFile("docs/readme.txt", "notes\n")
+      .withNewFile(".gitignore", "worktrees/\n")
+      .withNewFile(".rgignore", "scratch/\n")
+      .withNewFile("lib/.ignore", "dot/\n")
+      .withNewFile(".git/info/exclude", "private/\n")
+      .withNewFile("lib/lib.go", "package lib\n")
+      .withNewFile("worktrees/copy/go.mod", "module root\n")
+      .withNewFile("worktrees/copy/go.sum", "x\n")
+      .withNewFile("worktrees/copy/main.go", "package main\n")
+      .withNewFile("scratch/go.mod", "module scratch\n")
+      .withNewFile("scratch/s.go", "package scratch\n")
+      .withNewFile("lib/dot/go.mod", "module dot\n")
+      .withNewFile("lib/dot/d.go", "package dot\n")
+      .withNewFile("private/go.mod", "module private\n")
+      .withNewFile("private/p.go", "package private\n")
+      .withNewFile("vendor/v/go.mod", "module v\n")
+      .withNewFile("vendor/v/v.go", "package v\n")
+      .withNewFile("node_modules/n/n.go", "package n\n")
+    let subject = weeds(ws: gitMarked(tree).asWorkspace)
+    sameList("the go-lint modules", ["."], subject.goLintModules)
+    sameList("the go-lint upload", [".gitignore", ".rgignore", "data/blob.bin", "data/empty.dat", "docs/readme.txt", "go.mod", "go.sum", "lib/.ignore", "lib/lib.go", "main.go"], subject.goLintUploadedFiles)
+
+    let nested = directory
+      .withNewFile("svc/go.mod", "module svc\n")
+      .withNewFile("svc/s.go", "package svc\n")
+      .withNewFile("svc/data/blob.bin", "\x01\x02")
+      .withNewFile("other/o.txt", "not part of a module\n")
+    sameList("the go-lint upload without a root module", ["svc/data/blob.bin", "svc/go.mod", "svc/s.go"], weeds(ws: gitMarked(nested).asWorkspace).goLintUploadedFiles)
     null
   }
 
@@ -382,7 +696,7 @@ type WeedsTests {
     ["skill-modified", ".claude/skills/no-deltas/SKILL.md", "skill-removed", ".agents/skills/unslop/extra.txt", "skill-added", ".agents/skills/no-deltas/SKILL.md"].each { part =>
       expect(failure.contains(part), "the check must report " + part + ", got: " + failure)
     }
-    let restored = broken.generate.after
+    let restored = edited.withChanges(broken.generate)
     expect(restored.file(".claude/skills/no-deltas/SKILL.md").contents == skillSource("full").file("no-deltas/SKILL.md").contents, "generate must restore a hand-edited owned file")
     expect(!restored.exists(".agents/skills/unslop/extra.txt"), "generate must remove an extra file from an owned folder")
     expect(restored.exists(".agents/skills/no-deltas/SKILL.md"), "generate must restore a deleted file in an owned folder")
@@ -410,6 +724,22 @@ type WeedsTests {
   """
   pub consumer: Void @check {
     runSuite("consumer")
+  }
+
+  """
+  One workspace with a file ignored by each of .gitignore, .ignore, .rgignore, a
+  nested ignore file and .git/info/exclude, each holding a directive, bad
+  comments, internal markdown and Go lint issues, and an ignored full copy of
+  the workspace with its own go.mod, through the real entry points of all five
+  checks and the installer. No ignored file yields a finding, the violations
+  in files nothing ignores are still reported, goLintModules omits the copy's
+  module, and the files the search, the comments upload, the markdown listing
+  and the go-lint upload see agree. The global git excludes of the machine
+  that runs dagger cannot be set from a module; tests/fixtures/ignore-probe
+  shows them with a host run.
+  """
+  pub ignoreFiles: Void @check {
+    runSuite("ignore-files")
   }
 
   """
@@ -616,9 +946,91 @@ type WeedsTests {
       expect(installed.contains(".agents/skills/no-deltas/" + name), "installed-skills must report the hand edit to " + name + ", got:\n" + installed)
     }
     let changes = subject.generate
-    let restored = weeds(ws: changes.after.asWorkspace, skillSource: source)
+    let restored = weeds(ws: tree.withChanges(changes).asWorkspace, skillSource: source)
     expect(restored.installedSkillsReport == "no findings", "generate must restore every owned folder, got:\n" + restored.installedSkillsReport)
     (scans + [section("go-lint", checkResult(subject.goLint)), installed, section("generate", describeChanges(changes))]).join("\n\n")
+  }
+
+  let commentSuffixes: [String!]! = [".go", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+
+  let commentUploadGlobs: [String!]! = commentSuffixes.map { suffix => "**/*" + suffix }
+
+  let markdownListGlobs: [String!]! = ["**/*.[mM][dD]", "**/*.[mM][aA][rR][kK][dD][oO][wW][nN]", "**/*.[mM][dD][xX]"]
+
+  let hasAnySuffix(path: String!, suffixes: [String!]!): Boolean! {
+    suffixes.any { suffix => path.hasSuffix(suffix) }
+  }
+
+  let isBuildFile(path: String!): Boolean! {
+    hasAnySuffix(path, [".go", "/go.mod", "/go.sum", "/go.work", "/go.work.sum"]) or ["go.mod", "go.sum", "go.work", "go.work.sum"].contains(path)
+  }
+
+  let underAny(path: String!, prefixes: [String!]!): Boolean! {
+    prefixes.any { prefix => path.hasPrefix(prefix) }
+  }
+
+  let noneIgnored(label: String!, ignored: [String!]!, paths: [String!]!): Void {
+    let leaked = paths.filter { path => underAny(path, ignored) }
+    expect(leaked.isEmpty, label + " holds ignored files:\n" + leaked.join("\n"))
+  }
+
+  let ignoreFilesReport(caseDir: Directory!, workspace: Directory!): String! {
+    let source = skillSource("full")
+    let installed = ownedFolders(workspace, source, ["no-deltas", "unslop"])
+    let copy = installed.withoutDirectory(".git").withNewFile(".git", "gitdir: ../../.git/worktrees/copy\n")
+    let tree = installed.withDirectory("worktrees/copy", copy)
+    let subject = weeds(ws: tree.asWorkspace, skillSource: source)
+    let ignored = fragmentLines(caseDir.file("ignored.txt").contents)
+    expect(tree.exists("worktrees/copy/go.mod") and tree.exists("git-ignored/bad.go") and tree.exists("worktrees/copy/info-excluded/bad.go"), "the fixture must hold the ignored files and the copy it is meant to leave out")
+
+    let scanned = subject.scanFiles
+    expect(scanned.length > 0 and scanned.contains("app/app.go") and scanned.contains(".hidden/hidden.ts"), "the scan must see the files nothing ignores, hidden ones included, got:\n" + scanned.join("\n"))
+    noneIgnored("the scan", ignored, scanned)
+    let searched = sortRows(subject.searchRows(".", []).map { row => row.split(":")[0]! }.uniq)
+    sameList("the files a search for any character sees", scanned, searched)
+    sameList("the files the shared upload holds", scanned, subject.uploadedFiles([]))
+    sameList("the files the shared upload was built from", scanned, subject.uploadList([]))
+
+    let comments = scanned.filter { path => hasAnySuffix(path, commentSuffixes) }
+    expect(comments.length > 0, "the comments upload must not be empty")
+    sameList("the files the comments upload holds", comments, subject.uploadedFiles(commentUploadGlobs))
+    sameList("the files the comments upload was built from", comments, subject.uploadList(commentUploadGlobs))
+
+    let markdown = scanned.filter { path => path.hasSuffix(".md") }
+    sameList("the markdown candidates, empty files included", markdown, subject.listedFiles(markdownListGlobs))
+
+    let uploaded = subject.goLintUploadedFiles
+    let build = uploaded.filter { path => isBuildFile(path) }
+    sameList("the go-lint upload's Go sources and module files", scanned.filter { path => isBuildFile(path) }, build)
+    noneIgnored("the go-lint upload's Go sources and module files", ignored, build)
+    let extras = uploaded.filter { path => !isBuildFile(path) and !scanned.contains(path) }
+    noneIgnored("the go-lint upload's other files", ["worktrees/"], extras)
+    expect(subject.goLintModules == ["."], "an ignored copy's go.mod must not add a module, got: " + subject.goLintModules.join(", "))
+
+    let bare = gitMarked(caseDir.directory("workspace"))
+    let bareTree = bare.withDirectory("worktrees/copy", bare)
+    let control = weeds(ws: bareTree.asWorkspace, skillSource: source)
+    expect(control.goLintModules.contains("worktrees/copy"), "without its ignore files the copy's go.mod must be a module, got: " + control.goLintModules.join(", "))
+    let lit = control.suppressionsReport + "\n" + control.markdownReport
+    ignored.each { prefix =>
+      expect(lit.contains(prefix), "without its ignore files the fixture must report files under " + prefix + ", so that their absence above is the ignore handling; got:\n" + lit)
+    }
+
+    let scans = [
+      section("comments", checkResult(subject.comments))
+      section("suppressions", checkResult(subject.suppressions))
+      section("markdown", checkResult(subject.markdown))
+      section("go-lint", checkResult(subject.goLint))
+    ]
+    scans.each { scan =>
+      noneIgnored("a check's findings", ignored, scan.split("\n").filter { row => row.contains(":") and !row.hasPrefix("==") })
+    }
+    let installer = section("installed-skills", checkResult(subject.installedSkills))
+    (
+      [section("files seen", scanned.join("\n")), section("go-lint modules", subject.goLintModules.join("\n"))]
+      + scans
+      + [installer, section("generate", describeChanges(subject.generate)), section("go-lint upload beyond the scan list", extras.join("\n"))]
+    ).join("\n\n")
   }
 
   let section(name: String!, body: String!): String! {
@@ -661,12 +1073,7 @@ type WeedsTests {
   }
 
   let materialize(caseDir: Directory!): Directory! {
-    let base = caseDir.directory("workspace")
-    let named = if (base.exists("gitignore.fixture")) {
-      base.withFile(".gitignore", base.file("gitignore.fixture")).withoutFile("gitignore.fixture")
-    } else {
-      base
-    }
+    let named = ignoreAware(caseDir.directory("workspace"))
     if (caseDir.exists("symlinks.txt")) {
       fragmentLines(caseDir.file("symlinks.txt").contents).reduce(named) { dir, row =>
         let parts = row.split(" -> ")
@@ -696,6 +1103,7 @@ type WeedsTests {
       "golint" => subject.goLintReport
       "generate" => describeChanges(subject.generate)
       "consumer" => consumerReport(caseDir, workspace)
+      "ignore-files" => ignoreFilesReport(caseDir, workspace)
       "installed-skills" => {
         let report = subject.installedSkillsReport
         let passed = subject.installedSkills.pass

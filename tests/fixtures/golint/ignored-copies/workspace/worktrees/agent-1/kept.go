@@ -1,0 +1,3 @@
+package kept
+
+func leftover() {}

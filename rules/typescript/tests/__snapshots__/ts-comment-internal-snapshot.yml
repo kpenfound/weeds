@@ -2,6 +2,15 @@ id: ts-comment-internal
 snapshots:
   ? |
     /** Starts the work. */
+    //weeds-nl
+    export function run() {}
+  : labels:
+    - source: /** Starts the work. */
+      style: primary
+      start: 0
+      end: 23
+  ? |
+    /** Starts the work. */
     export function run() {}
   : labels:
     - source: /** Starts the work. */
@@ -10,12 +19,30 @@ snapshots:
       end: 23
   ? |
     // @ts-ignore
+    //weeds-nl
     const a: number = "x";
   : labels:
     - source: // @ts-ignore
       style: primary
       start: 0
       end: 13
+  ? |
+    // @ts-ignore
+    const a: number = "x";
+  : labels:
+    - source: // @ts-ignore
+      style: primary
+      start: 0
+      end: 13
+  ? |
+    // plain comment
+    //weeds-nl
+    const a = 1;
+  : labels:
+    - source: // plain comment
+      style: primary
+      start: 0
+      end: 16
   ? |
     // plain comment
     const a = 1;
@@ -33,3 +60,14 @@ snapshots:
       style: primary
       start: 19
       end: 26
+  ? |
+    function run() {
+    //weeds-nl
+      // body
+    //weeds-nl
+    }
+  : labels:
+    - source: // body
+      style: primary
+      start: 30
+      end: 37

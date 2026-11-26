@@ -1,13 +1,17 @@
 """
-Weeds: lint-enforced "no excuses" code. The module holds the complete
-consumer workspace; the scanning checks walk it through walkFiles, which skips
-what the policy leaves out, while the installer reads the workspace in full.
+Weeds: lint-enforced "no excuses" code. The module holds the consumer
+Workspace. The scanning checks reach files through the shared file layer
+(walk.dang): a ripgrep search, or an upload built from that search's file list,
+so ignored files are left out. No check evaluates the whole workspace.
 """
 type Weeds {
   """
-  The complete consumer workspace. Scan exclusions never apply to it.
+  The complete consumer workspace as a Directory. Scan exclusions never apply
+  to it. No check, installed-skills and generate included, evaluates it.
   """
   pub source: Directory!
+
+  let workspace: Workspace!
 
   let skillInput: Directory
 
@@ -17,36 +21,131 @@ type Weeds {
   """
   new(ws: Workspace!, skillSource: Directory = null) {
     self.source = ws.directory("/")
+    self.workspace = ws
     self.skillInput = skillSource
     self
+  }
+
+  let skillView: Directory! {
+    skillFolders(workspace)
   }
 
   let skillTree: Directory! {
     skillInput ?? fetchSkills()
   }
 
+  let files: FileAccess! {
+    FileAccess(ws: workspace)
+  }
+
   let settings: Settings! {
-    if (isRealFile(source, configFile)) {
-      parseSettings(source.file(configFile).contents)
+    let configView = workspace.directory("/", include: [configFile])
+    if (isRealFile(configView, configFile)) {
+      parseSettings(configView.file(configFile).contents)
     } else {
       Settings
     }
   }
 
+  let scanTree: Directory! {
+    files.upload().tree
+  }
+
   """
-  Files the scanning checks read: every file except those under .git, vendor,
-  node_modules and Weeds-owned skill folders. Hidden and gitignored files are
-  included. Sorted.
+  Files the scanning checks read, sorted: every file ripgrep sees, so files
+  matched by .gitignore, .ignore, .rgignore (nested ones included),
+  .git/info/exclude or the global git excludes of the machine that runs dagger
+  are left out, as are those under .git, vendor, node_modules and Weeds-owned
+  skill folders. Hidden files that are not ignored are included. Empty files
+  and files with NUL bytes are not listed. This is the only exhaustive listing:
+  no check evaluates it, only this call does. Fails naming ripgrep when the
+  dagger host has none: its grep fallback cannot honour ignore files.
   """
   pub scanFiles: [String!]! {
-    walkFiles(source)
+    files.listing
   }
 
   """
   Skill folders that carry a valid Weeds ownership marker, sorted.
   """
   pub ownedFolders: [String!]! {
-    findOwnedFolders(source)
+    files.owned
+  }
+
+  """
+  The shared search helper over one ripgrep pattern, for weeds-tests: one row
+  per matched line, path:line, for the lines in files matching one of the
+  weeds.toml-style include globs (every scanned file when none are given).
+  """
+  pub searchRows(pattern: String!, globs: [String!]!): [String!]! {
+    files.search(pattern, globs).map { hit => hit.path + ":" + toString(hit.line) }
+  }
+
+  """
+  Whether Workspace.search on the dagger host is backed by ripgrep, for
+  weeds-tests.
+  """
+  pub hostHasRipgrep: Boolean! {
+    files.hostRipgrep
+  }
+
+  """
+  The shared upload helper, for weeds-tests: the files its Directory actually
+  holds, sorted, for the weeds-style include globs (every scanned file when
+  none are given).
+  """
+  pub uploadedFiles(globs: [String!]!): [String!]! {
+    let held = files.upload(globs)
+    sortStrings(held.tree.glob("**/*").map { path => path.trimPrefix("./") }.filter { path => !path.hasSuffix("/") })
+  }
+
+  """
+  The file list the upload helper was built from, for weeds-tests.
+  """
+  pub uploadList(globs: [String!]!): [String!]! {
+    files.upload(globs).files
+  }
+
+  """
+  The listing helper for weeds-tests: the files matching the include globs,
+  sorted, empty files included, with ignore sources applied.
+  """
+  pub listedFiles(globs: [String!]!): [String!]! {
+    files.listedWithEmpty(globs)
+  }
+
+  """
+  The upload helper with support files, for weeds-tests: the files its
+  Directory holds, sorted.
+  """
+  pub supportUploadedFiles(globs: [String!]!, supportGlobs: [String!]!): [String!]! {
+    sortStrings(files.uploadWithSupport(globs, supportGlobs).tree.glob("**/*").map { path => path.trimPrefix("./") }.filter { path => !path.hasSuffix("/") })
+  }
+
+  """
+  What the ripgrep guard says about a search whose results carried these
+  submatch counts, for weeds-tests: "ok" or the failure message.
+  """
+  pub ripgrepGuard(submatchCounts: [Int!]!): String! {
+    { requireRipgrep(submatchCounts); "ok" } rescue { err: Error => err.message }
+  }
+
+  """
+  The files the listing reports for search results with these paths, for
+  weeds-tests: sorted, each once, whether a path is repeated or comes with and
+  without a leading "./".
+  """
+  pub listedPathsOf(paths: [String!]!): [String!]! {
+    listingPaths(paths)
+  }
+
+  """
+  The tree installed-skills and generate read, for weeds-tests: its files and
+  symlinks, sorted. Only the skills directories, their agent directories and
+  the root instruction files are in it.
+  """
+  pub skillViewEntries: [String!]! {
+    sortStrings(skillView.glob("**/*").map { path => path.trimPrefix("./") })
   }
 
   """
@@ -101,7 +200,9 @@ type Weeds {
 
   """
   No inline suppression directive (the eight forms listed in suppressions.dang)
-  in any scanned file. Only a named weeds.toml exception clears a finding.
+  in any scanned file. One workspace search for all eight forms; only the
+  matched lines are turned into findings. Only a named weeds.toml exception
+  clears a finding.
   """
   pub suppressions: Void @check {
     fail(suppressionsOutcome)
@@ -117,7 +218,9 @@ type Weeds {
 
   """
   No internal markdown beyond the always-allowed set and the weeds.toml
-  markdown allowlist; a stale allowlist entry fails.
+  markdown allowlist; a stale allowlist entry fails. Candidates are the
+  .md, .markdown and .mdx files in any case of the shared file listing, plus
+  the empty ones no repository ignore file hides.
   """
   pub markdown: Void @check {
     fail(markdownOutcome)
@@ -139,11 +242,21 @@ type Weeds {
 
   """
   The Go module directories go-lint runs in, sorted: every go.mod outside
-  vendor, testdata and node_modules whose module holds Go files. "." is the
-  workspace root.
+  vendor, testdata and node_modules whose module holds Go files, among the
+  files ripgrep sees, so a module that lives only in an ignored directory is
+  left out. "." is the workspace root.
   """
   pub goLintModules: [String!]! {
-    goModules(scanFiles)
+    goModules(files.listed)
+  }
+
+  """
+  The files the go-lint container holds, sorted, for weeds-tests: the Go
+  sources, go.mod, go.sum and go.work files the file layer lists, plus the
+  other files of the Go modules from a direct upload with .gitignore applied.
+  """
+  pub goLintUploadedFiles: [String!]! {
+    sortStrings(goLintTree.glob("**/*").map { path => path.trimPrefix("./") }.filter { path => !path.hasSuffix("/") })
   }
 
   """
@@ -171,19 +284,23 @@ type Weeds {
   output.
   """
   pub goLintReportFromResult(module: String!, status: Int!, stdout: String!, stderr: String!): String! {
-    reportOf(goLintOutcomeOf(goLintProcessFindings(source, module, status, stdout, stderr), settings))
+    reportOf(goLintOutcomeOf(goLintProcessFindings(goLintBase(goLintTree), module, status, stdout, stderr), settings))
   }
 
   let suppressionsOutcome: [Finding!]! {
-    applyExceptions("suppressions", suppressionHits(scanRoot(source, ownedFolders), scanFiles), settings)
+    applyExceptions("suppressions", suppressionHits(files), settings)
   }
 
   let goLintOutcome: [Finding!]! {
-    goLintFindings(source, scanFiles, settings)
+    goLintFindings(files, settings)
+  }
+
+  let goLintTree: Directory! {
+    goLintUpload(files, goModules(files.listed)).tree
   }
 
   let markdownOutcome: [Finding!]! {
-    markdownFindings(scanFiles, settings)
+    markdownFindings(files.listedWithEmpty(markdownGlobs), settings)
   }
 
   let reportOf(found: [Finding!]!): String! {
@@ -206,7 +323,7 @@ type Weeds {
   line (empty when there are none). The check itself fails with this text.
   """
   pub commentsReport: String! {
-    renderFindings(applyExceptions("comments", commentsFor(source), settings))
+    renderFindings(applyExceptions("comments", commentsFor(files), settings))
   }
 
   """
@@ -214,7 +331,7 @@ type Weeds {
   identifiers, tool directives, licence headers and generated files.
   """
   pub comments: Void @check {
-    verdict("comments", commentsFor(source))
+    verdict("comments", commentsFor(files))
   }
 
   """
@@ -246,22 +363,24 @@ type Weeds {
   }
 
   """
-  Classify the ast-grep matches (a JSON array) for one file's text exactly as
-  the comments check does, without running ast-grep. Fails on a rule id that
-  is not registered.
+  Classify the ast-grep matches (a JSON array, with lines of the original file
+  starting at 0) for one file exactly as the comments check does, without
+  running ast-grep. Fails on a rule id that is not registered.
   """
-  pub classifyComments(path: String!, text: String!, matches: String!): String! {
+  pub classifyComments(path: String!, matches: String!): String! {
     let found = JSON.decode(matches) :: [SgMatch!]!
     found.each { m => checkCommentRule(m.ruleId) }
-    renderFindings(commentFindings(path, text, found.filter { m => !commentIgnoredRules.contains(m.ruleId) }))
+    renderFindings(commentFindings(path, found.filter { m => !commentIgnoredRules.contains(m.ruleId) }))
   }
 
   """
-  Every rule id a comment scan may report: registered rules and the doc
-  candidate markers the check consumes.
+  Every rule id a comment scan may report: registered rules and the rules
+  whose matches the check turns into a registered rule or uses as facts about
+  a file (trailing and blank-line violations, generated files, licence
+  headers).
   """
   pub commentScanRules: [String!]! {
-    commentsRules + commentMarkerRules
+    commentsRules + commentDetectorRules
   }
 
   """
@@ -283,22 +402,22 @@ type Weeds {
   removed. weeds.toml [skills] subset picks the skills; the default is all seven.
   """
   pub generate: Changeset! @generate {
-    let targets = skillTargets(source)
+    let targets = skillTargets(skillView)
     if (targets.isEmpty) {
       raise "dagger generate has nowhere to install skills: create a skills directory such as .agents/skills or .claude/skills, or add AGENTS.md or CLAUDE.md"
     }
     checkSkillSource(skillTree, settings.skills)
-    installChanges(source, skillTree, targets, settings.skills)
+    installChanges(skillView, skillTree, targets, settings.skills)
   }
 
   let installedSkillsOutcome: [Finding!]! {
-    let targets = skillTargets(source)
+    let targets = skillTargets(skillView)
     let found: [Finding!]! = []
     if (!targets.isEmpty) {
       checkSkillSource(skillTree, settings.skills)
-      let conflicts = installConflicts(source, targets, settings.skills)
+      let conflicts = installConflicts(skillView, targets, settings.skills)
       if (conflicts.isEmpty) {
-        found = changeFindings(installChanges(source, skillTree, targets, settings.skills))
+        found = changeFindings(installChanges(skillView, skillTree, targets, settings.skills))
       } else {
         found = conflictFindings(conflicts)
       }

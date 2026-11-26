@@ -1,0 +1,11 @@
+id: ts-leading
+language: TypeScript
+rule:
+  kind: comment
+  not:
+    follows:
+      stopBy: end
+      not:
+        any:
+          - kind: comment
+          - kind: hash_bang_line

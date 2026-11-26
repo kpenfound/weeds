@@ -1,0 +1,6 @@
+.hidden/kept.py:1: noqa: inline suppression # noqa is not allowed; fix the code, or name an exception in weeds.toml
+kept.go:3: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+other/nested-dot.go:3: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+other/nested-git.go:3: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+other/nested-rg.go:3: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml
+sub/kept.go:3: nolint: inline suppression //nolint is not allowed; fix the code, or name an exception in weeds.toml

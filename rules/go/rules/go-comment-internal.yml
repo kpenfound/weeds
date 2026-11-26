@@ -6,6 +6,4 @@ files:
   - "**/internal/**/*.go"
   - "internal/**/*.go"
 rule:
-  kind: comment
-  not:
-    matches: go-directive
+  matches: go-plain-comment

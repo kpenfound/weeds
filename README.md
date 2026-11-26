@@ -14,6 +14,14 @@ code leaving the machine. It also installs the matching agent skills from
 
 ## Install
 
+Weeds needs [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) on the
+`PATH` of the machine that runs `dagger`, a laptop or a CI runner. The scanning
+checks find files with `Workspace.search`, which runs ripgrep on that machine
+and applies `.gitignore`, `.ignore`, `.rgignore`, `.git/info/exclude` and the
+machine's global git excludes. Without ripgrep Dagger falls back to `grep`,
+which honours none of them, so Weeds stops with an error that names ripgrep
+instead of scanning ignored files.
+
 1. Run `dagger install github.com/kpenfound/weeds`
 2. Give the repository somewhere to install skills: an `AGENTS.md` (skills go
    to `.agents/skills`), a `CLAUDE.md` (`.claude/skills`), or an existing
@@ -45,7 +53,8 @@ exception evaluator driven by `weeds.toml`.
 
 ### suppressions
 
-A text scan over every file kind. It reports each line that holds one of
+One `Workspace.search` for all eight directives over every file kind that
+ripgrep reads (see Scanning). It reports each line that holds one of
 `//nolint`, `lint:ignore`, `eslint-disable`, `@ts-expect-error`, `@ts-ignore`,
 `@ts-nocheck`, `ast-grep-ignore` or `# noqa`, one finding per directive per
 line, under a rule named for the directive (`nolint`, `lint-ignore`,
@@ -55,8 +64,12 @@ named exception in `weeds.toml` clears a finding; no inline text does.
 
 ### markdown
 
-Markdown files (`.md`, `.markdown`, `.mdx`) are reported under the rule
-`internal-markdown`, except these, which are always allowed:
+Markdown files (`.md`, `.markdown`, `.mdx`, in any letter case) are picked
+from the shared file listing that `comments` and `go-lint` also use, so
+`markdown` skips the same files they do. Empty markdown files, which ripgrep
+never lists, are added by one more step: a listing of the markdown files only,
+checked against the repository's ignore files. They are reported under the
+rule `internal-markdown`, except these, which are always allowed:
 
 - README, AGENTS, CLAUDE, CONTRIBUTING, LICENSE, changelog and release-notes
   files, matched on the lowercased file name without its extension, so
@@ -92,28 +105,111 @@ failure or output Weeds cannot read raises an error instead of passing. The Go
 module and build caches are kept between runs, and go.mod's `go` directive must
 not need a newer toolchain than the image carries.
 
+Modules come from the files the workspace search sees, so a copy of a module in
+an ignored directory (an agent worktree, say) is neither a module nor linted.
+golangci-lint gets the Go sources, `go.mod`, `go.sum` and `go.work` files from
+that same search, so an ignored one never reaches it. Its other build inputs,
+such as embedded assets and cgo sources, come from the modules' directories with
+`.gitignore` applied. golangci-lint reports only on Go files, so a build input
+hidden only by another ignore source cannot produce a finding. Its JSON output
+is decoded with Dang's built-in decoder.
+
 A complexity finding ends with `(baseline symbol "Name")`, where `Name` is the
 nearest preceding top-level declaration (`Recv.Method` for a method), so the
-baseline entry can be copied from the finding.
+baseline entry can be copied from the finding. One `grep` in the golangci-lint
+container reads the declaration lines of the files with complexity findings;
+no file is read one at a time.
 
 ### Scanning
 
-The scanning checks (`suppressions`, `markdown`, `comments`) share one walk of
-the workspace. It skips `.git`, `vendor`, `node_modules` and Weeds-owned skill
-folders, and it includes hidden and gitignored files, so a directive cannot
-hide in an ignored file. The skips apply to the walk only. The installer and
-`installed-skills` read the whole workspace, including owned skill folders,
-their markers and any hand edit inside them.
+The scanning checks (`suppressions`, `markdown`, `comments`, `go-lint`) reach
+files through the workspace, not through a copy of it. Nothing evaluates a
+whole-workspace `Directory`, nothing reads files one at a time, and no check
+walks the workspace in Dang.
+
+- `suppressions` runs one `Workspace.search` for the eight directive patterns
+  and turns only the matched lines into findings.
+- `markdown` filters the shared file list that `comments` and `go-lint` also
+  use down to markdown files, and adds the empty markdown files that no
+  repository ignore file hides. That listing and one more step, which lists
+  the markdown candidates the shared list did not return in a single in-engine
+  listing over a tree of the repository's ignore files, are markdown's one
+  pass. A non-empty file that a global exclude hid is not in the shared list,
+  so markdown skips it like the other checks.
+- `comments` and `go-lint` upload only the files their tool needs, built from
+  the same search that lists the files ripgrep sees. Checks that need that
+  file list share one search.
+- `scanFiles` and `goLintModules` stay public. They list the scanned files and
+  the Go modules among them, and leave ignored files out.
+
+Files that are left out:
+
+- Files matched by `.gitignore`, `.ignore` or `.rgignore`, nested ones
+  included, and by `.git/info/exclude`.
+- Files matched by the global git excludes of the machine that runs
+  `dagger` (`core.excludesFile`, or `$XDG_CONFIG_HOME/git/ignore`, which
+  defaults to `~/.config/git/ignore`).
+- `.git`, `vendor`, `node_modules` and Weeds-owned skill folders.
+
+Hidden files that no ignore file matches are scanned, and so are the ignore
+files themselves. A directive, a comment or internal markdown in an ignored
+file is not reported, so an ignore file decides what Weeds checks. An ignore
+file is committed and shows up in review, and a committed `.ignore` or
+`.rgignore` can hide a directive from Weeds. Weeds has no rule about ignore
+files.
+
+How the ignore files reach the workspace:
+
+- `Workspace.search` runs ripgrep on the machine that runs `dagger`, in your
+  checkout, so it applies that machine's git configuration. A checkout with a
+  `.git` directory gets `.gitignore` as well as `.ignore` and `.rgignore`.
+  `.git/info/exclude` is honoured with or without one.
+- `Workspace.directory(gitignore: true)` reads `.gitignore` files only. It
+  does not read `.ignore`, `.rgignore`, `.git/info/exclude` or global
+  excludes. Weeds therefore builds each upload from the search's file list, so
+  an upload holds the files a search sees and no others. `go-lint` adds the
+  other files its modules need to build (embedded assets, empty or binary
+  test data) with `.gitignore` applied. golangci-lint reports on Go files
+  only, so a build input hidden only by another ignore source cannot produce a
+  finding.
+- The global git excludes belong to the machine, not to the repository. Your
+  laptop and a CI runner can differ, and CI decides. An empty markdown file
+  hidden only by your personal global excludes is still reported, because
+  ripgrep never lists an empty file and the in-engine check that closes this
+  gap for repository ignore sources cannot read them. This is the only
+  global-excludes gap: a markdown file that holds text, or sits in a globally
+  excluded directory, gives no finding.
+- Ripgrep must be on the `PATH` (see Install). Dagger's `grep` fallback
+  honours no ignore file, so Weeds raises an error naming ripgrep instead of
+  scanning ignored files.
+
+The skips apply to the scanning checks only. The installer and
+`installed-skills` read the skills directories, their agent directories and
+`AGENTS.md` and `CLAUDE.md`, including owned skill folders, their markers and
+any hand edit inside them, whether or not an ignore file mentions them.
+`tests/fixtures/ignore-probe` records how each source behaves, with a host run
+that shows the global excludes.
 
 ### Comments
 
-`comments` runs a pinned ast-grep (0.39.5) in a container with the Weeds rule
-packs in `rules/go` and `rules/typescript` and reads its `--json` output. The
-consumer's ast-grep configuration is never read, and ast-grep's own inline
-suppression comment is neutralised in the scanned copy, so that comment is
-reported like any other. `.go` uses the Go grammar, `.ts` the TypeScript
-grammar, and `.tsx`, `.js`, `.jsx`, `.mjs` and `.cjs` the TSX grammar (the TSX
-pack is derived from the TypeScript pack at run time).
+`comments` uploads only the Go and TS/JS files that no ignore file leaves out
+and runs a pinned ast-grep (0.39.5) in a container once per Weeds rule pack
+(`rules/go`, `rules/typescript` and the TSX pack), reading its `--json` output.
+The packs report violations only: a doc comment that complies produces no
+match, and no file is read to judge one. The consumer's ast-grep configuration
+is never read, and ast-grep's own inline suppression comment is neutralised in
+the scanned copy, so that comment is reported like any other. `.go` uses the Go
+grammar, `.ts` the TypeScript grammar, and `.tsx`, `.js`, `.jsx`, `.mjs` and
+`.cjs` the TSX grammar (the TSX pack is derived from the TypeScript pack at run
+time).
+
+The rules cannot see line breaks in a syntax tree, so the scanned copy gets a
+`//weeds-nl` comment line before every line but the first. Two adjacent
+markers are a blank line, and a comment whose previous sibling is not a marker
+has code before it on its line. Generated files and licence headers are also
+rules (`go-generated-file`, `go-licence-header` and the `ts-` pair), so their
+facts come from the same scan. A licence header is a leading comment run that
+holds a licence or copyright line; a block comment counts whole.
 
 Allowed: a doc comment directly above an exported identifier in an importable
 package (Go: any comment, including the package comment and fields or methods
@@ -258,8 +354,29 @@ lines to the shared exception evaluator.
 
 Fixture rules:
 
-- Name an ignore file `gitignore.fixture` at the workspace root. The harness
-  renames it to `.gitignore` when the case runs.
+- Name an ignore file `gitignore.fixture`, `ignore.fixture` or
+  `rgignore.fixture`, at the workspace root or in any directory. The harness
+  renames it to `.gitignore`, `.ignore` or `.rgignore` beside it when the case
+  runs, and `git-info-exclude.fixture` at the workspace root to
+  `.git/info/exclude`. It also adds a `.git/HEAD` marker, because ripgrep
+  applies `.gitignore` only inside a git repository. A fixture never holds a
+  live ignore file or a `.git` directory, which would change this repository's
+  own scans.
+- The `ignore-files` suite is the end-to-end case for ignore handling: one
+  workspace with a directive, bad comments, internal markdown and Go lint
+  issues in a directory ignored by each of `.gitignore`, `.ignore`,
+  `.rgignore`, nested ignore files and `.git/info/exclude`, plus violations
+  that nothing ignores. The harness adds an ignored full copy of the
+  workspace, with its own `go.mod`, as `worktrees/copy`. The case runs all
+  five checks and the installer and asserts that no ignored file is
+  reported, that `goLintModules` omits the copy, and that the search, the
+  shared upload, the comments upload, the markdown listing and the go-lint
+  upload agree. It also asserts that the same workspace without its ignore
+  files does report the ignored files.
+- Global git excludes cannot be set from inside a module, so no suite covers
+  them. `tests/fixtures/ignore-probe/global-excludes.sh` runs the real
+  entry points on a host workspace with a scratch `HOME` and records the
+  result.
 - Commit no symlinks. List them in a `symlinks.txt` beside `workspace`, one
   `link -> target` per line.
 - The `generate` suite prints the installer's changeset: `+ path body` for an

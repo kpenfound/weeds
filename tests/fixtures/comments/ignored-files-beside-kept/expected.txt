@@ -1,0 +1,1 @@
+sub/kept-bad.go:3: go-comment-detached: trailing comment

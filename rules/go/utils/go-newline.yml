@@ -1,0 +1,11 @@
+# The comments check puts a //weeds-nl line before every line of a source file
+# except the first (see markSources in astgrep.dang), so the syntax tree shows
+# line breaks: two adjacent markers are a blank line, and a comment whose
+# previous sibling is not a marker has code before it on its line. A marker is
+# a comment node and never a finding. Original line n is line 2n in the marked
+# file. Rule tests give the marked form.
+id: go-newline
+language: Go
+rule:
+  kind: comment
+  regex: '^//weeds-nl$'

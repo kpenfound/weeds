@@ -109,3 +109,51 @@ let checkResult(check: Check!): String! {
     check.error.message ?? "the check failed without a message"
   }
 }
+
+# Fixture workspaces cannot hold live ignore files or a .git directory without
+# changing the repository's own scans. A fixture names them with a .fixture
+# suffix and the harness renames them when the case runs:
+#   gitignore.fixture, ignore.fixture, rgignore.fixture -> .gitignore, .ignore, .rgignore
+#     in the same directory, at any depth
+#   git-info-exclude.fixture (root only) -> .git/info/exclude
+# Every workspace then gets a .git/HEAD marker: ripgrep applies .gitignore only
+# inside a git repository, and a .git entry is all it looks for.
+let liveIgnoreTarget(path: String!): String! {
+  let parts = path.split("/")
+  let name = parts[parts.length - 1]!
+  let parent = parts.dropLast.join("/")
+  let live = case (name) {
+    "gitignore.fixture" => ".gitignore"
+    "ignore.fixture" => ".ignore"
+    "rgignore.fixture" => ".rgignore"
+    "git-info-exclude.fixture" => if (parts.length == 1) { ".git/info/exclude" } else { "" }
+    else => ""
+  }
+  if (live == "" or parent == "") {
+    live
+  } else {
+    parent + "/" + live
+  }
+}
+
+let liveIgnoreFiles(base: Directory!): Directory! {
+  base.glob("**/*.fixture").map { path => path.trimPrefix("./") }.filter { path => liveIgnoreTarget(path) != "" }.reduce(base) { dir, path =>
+    dir.withFile(liveIgnoreTarget(path), base.file(path)).withoutFile(path)
+  }
+}
+
+let gitMarked(base: Directory!): Directory! {
+  if (base.exists(".git/HEAD")) {
+    base
+  } else {
+    base.withNewFile(".git/HEAD", "ref: refs/heads/main\n")
+  }
+}
+
+let ignoreAware(base: Directory!): Directory! {
+  gitMarked(liveIgnoreFiles(base))
+}
+
+let sameList(label: String!, want: [String!]!, got: [String!]!): Void {
+  expect(want.join("\n") == got.join("\n"), label + " differs\n--- expected\n" + want.join("\n") + "\n--- actual\n" + got.join("\n"))
+}

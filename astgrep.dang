@@ -8,7 +8,15 @@ let scanArguments: [String!]! = ["ast-grep", "scan", "--config", "/pack/sgconfig
 
 let tsxExtensions: [String!]! = [".tsx", ".js", ".jsx", ".mjs", ".cjs"]
 
-let neutraliseIgnores = "grep -rlZ --include='*.go' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.mjs' --include='*.cjs' --include='*.cts' --include='*.mts' ast-grep-ignore . | xargs -0 -r sed -i 's/ast-grep-ignore/ast_grep_ignore/g'"
+let commentGlobs: [String!]! = ["**/*.go", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"]
+
+# Run on the uploaded copy, which holds nothing but source files. The first
+# expression keeps a consumer's own ast-grep-ignore directives from hiding a
+# comment from the rules. The second puts a //weeds-nl line before every line
+# but the first, which makes line breaks visible to the rules: two adjacent
+# markers are a blank line, and a comment whose previous sibling is not a marker
+# has code before it on its line. Original line n becomes line 2n.
+let markSources = "find . -type f -print0 | xargs -0 -r sed -i -e 's/ast-grep-ignore/ast_grep_ignore/g' -e '1!s#^#//weeds-nl\\n#'"
 
 let astGrepTool: Container! {
   container
@@ -35,39 +43,57 @@ let hasTsxExtension(path: String!): Boolean! {
   tsxExtensions.any { ext => path.hasSuffix(ext) }
 }
 
-let scanWithPack(scanDir: Directory!, pack: Directory!): [SgMatch!]! {
-  let ran = astGrepTool
-    .withDirectory("/pack", pack)
-    .withDirectory("/work", scanDir)
+let markedSources(tree: Directory!): Container! {
+  astGrepTool
+    .withDirectory("/work", tree)
     .withWorkdir("/work")
-    .withExec(["sh", "-c", neutraliseIgnores])
+    .withExec(["sh", "-c", markSources])
+}
+
+# One ast-grep run of a rule pack over the marked sources. Lines come back as
+# the lines of the original files.
+let scanWithPack(marked: Container!, pack: Directory!): [SgMatch!]! {
+  let ran = marked
+    .withDirectory("/pack", pack)
     .withExec(scanArguments, redirectStderr: "/stderr.txt")
   let complaints = ran.file("/stderr.txt").contents
   if (complaints.trimSpace != "") {
     raise "comments: ast-grep reported errors:\n" + complaints
   }
   (JSON.decode(ran.stdout) :: [SgMatch!]!).map { m =>
-    SgMatch(file: m.file.trimPrefix("./"), ruleId: m.ruleId, range: m.range)
+    SgMatch(
+      file: m.file.trimPrefix("./")
+      ruleId: m.ruleId
+      range: SgRange(start: SgPoint(line: m.range.start.line / 2, column: m.range.start.column))
+    )
   }
 }
 
-let scanComments(source: Directory!): [SgMatch!]! {
-  let owned = findOwnedFolders(source)
-  let files = walkFiles(source)
-  let scanDir = scanRoot(source, owned)
+# The matches of each pack that has files to scan: Go, TypeScript and the TSX
+# pack derived from it, one ast-grep run each.
+let scanComments(upload: Upload!): [SgMatch!]! {
+  let hasGo = upload.files.any { f => f.hasSuffix(".go") }
+  let hasTs = upload.files.any { f => f.hasSuffix(".ts") }
+  let hasTsx = upload.files.any { f => hasTsxExtension(f) }
+  if (!hasGo and !hasTs and !hasTsx) {
+    return []
+  }
+  let marked = markedSources(upload.tree)
   let found: [SgMatch!]! = []
-  if (files.any { f => f.hasSuffix(".go") }) {
-    found += scanWithPack(scanDir, rulePackSource("go")).filter { m => m.file.hasSuffix(".go") }
+  if (hasGo) {
+    found += scanWithPack(marked, rulePackSource("go"))
   }
-  if (files.any { f => f.hasSuffix(".ts") }) {
-    found += scanWithPack(scanDir, rulePackSource("typescript")).filter { m => m.file.hasSuffix(".ts") }
+  if (hasTs) {
+    found += scanWithPack(marked, rulePackSource("typescript"))
   }
-  if (files.any { f => hasTsxExtension(f) }) {
-    found += scanWithPack(scanDir, tsxRulePack(rulePackSource("typescript"))).filter { m => hasTsxExtension(m.file) }
+  if (hasTsx) {
+    found += scanWithPack(marked, tsxRulePack(rulePackSource("typescript")))
   }
   found.filter { m => checkCommentRule(m.ruleId) and !commentIgnoredRules.contains(m.ruleId) }
 }
 
+# Matches by file in one pass: each match is linked to the next match of its
+# file, so the lists are cut out without filtering the matches once per file.
 let groupByFile(matches: [SgMatch!]!): Map[[SgMatch!]!]! {
   let first: Map[Int!]! = [:]
   let last: Map[Int!]! = [:]
@@ -95,10 +121,9 @@ let groupByFile(matches: [SgMatch!]!): Map[[SgMatch!]!]! {
   groups
 }
 
-let commentsFor(source: Directory!): [Finding!]! {
-  let found = scanComments(source)
-  let groups = groupByFile(found)
-  concatFindings(commentFilesOf(found).map { path =>
-    commentFindings(path, source.file(path).contents, groups[path] ?? [])
-  })
+# The comments check on the Go and TS/JS files the shared upload helper holds:
+# one listing for the upload, one ast-grep run per pack, no file read.
+let commentsFor(files: FileAccess!): [Finding!]! {
+  let groups = groupByFile(scanComments(files.upload(commentGlobs)))
+  concatFindings(groups.keys.map { path => commentFindings(path, groups[path] ?? []) })
 }

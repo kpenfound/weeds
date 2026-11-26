@@ -4,9 +4,17 @@ let escapeRegexp(text: String!): String! {
   regexSpecials.reduce(text) { escaped, ch => escaped.replace(ch, "\\" + ch) }
 }
 
+# classes keeps [...] as a character class (the file layer's include globs use
+# it for case-insensitive extensions); weeds.toml path globs never do.
+let globRegexp(glob: String!, classes: Boolean!): String! {
+  let trimmed = glob.trimPrefix("./").trimSuffix("/")
+  let marked = if (classes) { trimmed.replace("[", "\x05").replace("]", "\x06") } else { trimmed }
+  let body = escapeRegexp(marked.replace("**/", "\x01").replace("**", "\x02").replace("*", "\x03").replace("?", "\x04"))
+  "^" + body.replace("\x01", "(?:.*/)?").replace("\x02", ".*").replace("\x03", "[^/]*").replace("\x04", "[^/]").replace("\x05", "[").replace("\x06", "]") + "(?:/.*)?$"
+}
+
 let globPattern(glob: String!): String! {
-  let body = escapeRegexp(glob.trimPrefix("./").trimSuffix("/").replace("**/", "\x01").replace("**", "\x02").replace("*", "\x03").replace("?", "\x04"))
-  "^" + body.replace("\x01", "(?:.*/)?").replace("\x02", ".*").replace("\x03", "[^/]*").replace("\x04", "[^/]") + "(?:/.*)?$"
+  globRegexp(glob, false)
 }
 
 let globPatterns(globs: [String!]!): [String!]! {

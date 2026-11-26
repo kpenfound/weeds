@@ -1,0 +1,7 @@
+id: ts-blank-line
+language: TypeScript
+rule:
+  matches: ts-newline
+  follows:
+    stopBy: neighbor
+    matches: ts-newline

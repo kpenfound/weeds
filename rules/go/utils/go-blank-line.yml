@@ -1,0 +1,7 @@
+id: go-blank-line
+language: Go
+rule:
+  matches: go-newline
+  follows:
+    stopBy: neighbor
+    matches: go-newline

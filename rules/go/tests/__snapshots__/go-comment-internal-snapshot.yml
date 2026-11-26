@@ -11,6 +11,19 @@ snapshots:
       start: 14
       end: 41
   ? |
+    package main
+    //weeds-nl
+
+    //weeds-nl
+    // main starts the program.
+    //weeds-nl
+    func main() {}
+  : labels:
+    - source: // main starts the program.
+      style: primary
+      start: 36
+      end: 63
+  ? |
     package p
 
     // Run starts the work.
@@ -26,3 +39,22 @@ snapshots:
       style: primary
       start: 25
       end: 32
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    func Run() {}
+  : labels:
+    - source: // Run starts the work.
+      style: primary
+      start: 33
+      end: 56
+  ? "package p\n//weeds-nl\n\n//weeds-nl\nfunc run() {\n//weeds-nl\n\t// body\n//weeds-nl\n}\n"
+  : labels:
+    - source: // body
+      style: primary
+      start: 58
+      end: 65

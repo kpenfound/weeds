@@ -1,5 +1,5 @@
-let sgMatch(rule: String!, line: Int!, column: Int!, endLine: Int!): String! {
-  "{\"file\":\"x\",\"ruleId\":\"" + rule + "\",\"range\":{\"start\":{\"line\":" + toString(line) + ",\"column\":" + toString(column) + "},\"end\":{\"line\":" + toString(endLine) + ",\"column\":0}}}"
+let sgMatch(rule: String!, line: Int!, column: Int!): String! {
+  "{\"file\":\"x\",\"ruleId\":\"" + rule + "\",\"range\":{\"start\":{\"line\":" + toString(line) + ",\"column\":" + toString(column) + "}}}"
 }
 
 let sgMatches(items: [String!]!): String! {

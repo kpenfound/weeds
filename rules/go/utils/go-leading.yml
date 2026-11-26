@@ -1,0 +1,9 @@
+id: go-leading
+language: Go
+rule:
+  kind: comment
+  not:
+    follows:
+      stopBy: end
+      not:
+        kind: comment

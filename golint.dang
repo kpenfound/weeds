@@ -60,34 +60,53 @@ let goLintCandidate(path: String!): Boolean! {
   !path.split("/").any { part => part == "testdata" }
 }
 
-let moduleDepth(module: String!): Int! {
-  if (module == ".") {
-    0
-  } else {
-    module.length
-  }
-}
-
+# The module directory a Go source directory belongs to: the nearest ancestor
+# that is a module directory, "" when none is.
 let owningModule(modules: [String!]!, dir: String!): String! {
-  let best = ""
-  let found = false
-  modules.each { module =>
-    if (module == "." or dir == module or dir.hasPrefix(module + "/")) {
-      if (!found or moduleDepth(module) > moduleDepth(best)) {
-        best = module
-        found = true
-      }
+  let current = dir
+  let owner = ""
+  loop {
+    if (modules.contains(current)) {
+      owner = current
+      break
     }
+    if (current == ".") {
+      break
+    }
+    current = parentDirectory(current)
   }
-  best
+  owner
 }
 
+# Modules from a file list that holds at least every .go file and go.mod: each
+# go.mod outside testdata whose module holds a Go file.
 let goModules(files: [String!]!): [String!]! {
-  let candidates = files.filter { path => goLintCandidate(path) }
+  let relevant = files.filter { path => path.hasSuffix(".go") or path == "go.mod" or path.hasSuffix("/go.mod") }
+  let candidates = relevant.filter { path => goLintCandidate(path) }
   let modules = sortStrings(candidates.filter { path => lastPart(path) == "go.mod" }.map { path => parentDirectory(path) })
   let sourceDirectories = candidates.filter { path => path.hasSuffix(".go") }.map { path => parentDirectory(path) }.uniq
-  let used = sourceDirectories.map { dir => owningModule(modules, dir) }
+  let used = sourceDirectories.map { dir => owningModule(modules, dir) }.uniq
   modules.filter { module => used.contains(module) }
+}
+
+# What a build reads, taken only from the search list so that an ignored file
+# never reaches the upload: Go sources and the files that make up modules and
+# workspaces.
+let goLintBuildGlobs: [String!]! = ["**/*.go", "**/go.mod", "**/go.sum", "**/go.work", "**/go.work.sum"]
+
+# The other files a build reads (go:embed targets, cgo sources, testdata) come
+# from a direct upload of the modules' directories with .gitignore applied. It
+# never carries the files above: those come from the search list alone.
+let goLintSupportGlobs(modules: [String!]!): [String!]! {
+  if (modules.contains(".")) {
+    ["**"]
+  } else {
+    modules.map { module => escapeGlob(module) + "/**" }
+  }
+}
+
+let goLintUpload(files: FileAccess!, modules: [String!]!): Upload! {
+  files.uploadWithSupport(goLintBuildGlobs, goLintSupportGlobs(modules), goLintBuildGlobs)
 }
 
 let goLintBase(source: Directory!): Container! {
@@ -101,7 +120,7 @@ let goLintBase(source: Directory!): Container! {
     .withEnvVariable("GOLANGCI_LINT_CACHE", "/go/lint-cache")
     .withEnvVariable("GOFLAGS", "-mod=mod")
     .withEnvVariable("GOTOOLCHAIN", "local")
-    .withDirectory(goLintSource, source.filter(exclude: [".git", "**/.git"]))
+    .withDirectory(goLintSource, source)
     .withNewFile(goLintPresetPath, goLintPreset)
     .withExec(["sh", "-c", goLintInertNolint])
 }
@@ -140,20 +159,51 @@ let declaredSymbol(row: String!): String! {
   }
 }
 
-let goSymbol(rows: [String!]!, line: Int!): String! {
-  let at = if (line > rows.length) { rows.length - 1 } else { line - 1 }
-  let symbol = "(none)"
+# One declaration line a grep reported, as "path:line:text".
+type GoDeclaration {
+  path: String!
+  line: Int!
+  text: String!
+}
+
+let goDeclarationOf(row: String!): GoDeclaration! {
+  let m = row.match(`^(?P<path>.*?):(?P<line>[0-9]+):(?P<text>.*)$`)
+  GoDeclaration(path: m!.named["path"]!, line: parseInt(m!.named["line"]!), text: m!.named["text"]!)
+}
+
+# The top-level declaration that starts a line, the lines the symbol lookup
+# needs. LC_ALL=C makes \b mean what it means in the symbol patterns here.
+let goDeclarationPattern = "^(func|var|const|type)\\b"
+
+# The nearest declaration at or before line in a file, from grep rows that run
+# in path and line order: a binary search for the last row not after the file
+# position, then that row's declaration. "(none)" when the file holds no
+# declaration up to that line.
+let goSymbol(rows: [String!]!, path: String!, line: Int!): String! {
+  let low = 0
+  let high = rows.length
   loop {
-    if (at < 0) {
+    if (low >= high) {
       break
     }
-    if (rows[at]!.containsMatch(`^(?:func|var|const|type)\b`)) {
-      symbol = declaredSymbol(rows[at]!)
-      break
+    let middle = (low + high) / 2
+    let row = goDeclarationOf(rows[middle]!)
+    if (row.path < path or (row.path == path and row.line <= line)) {
+      low = middle + 1
+    } else {
+      high = middle
     }
-    at = at - 1
   }
-  symbol
+  if (low == 0) {
+    "(none)"
+  } else {
+    let row = goDeclarationOf(rows[low - 1]!)
+    if (row.path == path) {
+      declaredSymbol(row.text)
+    } else {
+      "(none)"
+    }
+  }
 }
 
 let baselineNote(symbol: String!): String! {
@@ -290,23 +340,41 @@ let goLintRaiseIssue(module: String!, index: Int!): [Finding!]! {
   [index].map { failed => raise goLintIssueMessage(module, failed) }
 }
 
-let goLintSymbols(source: Directory!, found: [Finding!]!): [Finding!]! {
-  let rows: Map[[String!]!]! = [:]
-  found.each { f =>
-    if (complexityLinters.contains(f.rule) and !rows.has(f.path)) {
-      rows = rows.with(f.path, source.file(f.path).contents.split("\n"))
-    }
+# One grep, in the container that holds the uploaded tree, over only the files
+# that carry a complexity finding: the declaration lines of those files, in path
+# and line order. Exit status 1 only means no file holds one.
+let goLintDeclarations(base: Container!, paths: [String!]!): [String!]! {
+  let ran = base
+    .withEnvVariable("LC_ALL", "C")
+    .withExec(["grep", "-n", "-H", "-a", "-E", goDeclarationPattern, "--"] + paths, expect: ReturnType.ANY)
+  if (ran.exitCode > 1) {
+    raise "go-lint: could not read declarations in " + toString(paths.length) + " file(s) with complexity findings: " + ran.stderr.trimSpace
   }
-  found.map { f =>
-    if (complexityLinters.contains(f.rule)) {
-      Finding(path: f.path, line: f.line, rule: f.rule, message: f.message + baselineNote(goSymbol(rows[f.path]!, f.line)))
-    } else {
-      f
+  let listed = ran.stdout
+  if (listed == "") {
+    []
+  } else {
+    listed.trimSuffix("\n").split("\n")
+  }
+}
+
+let goLintSymbols(base: Container!, found: [Finding!]!): [Finding!]! {
+  let paths = sortStrings(found.filter { f => complexityLinters.contains(f.rule) }.map { f => goLintSource + "/" + f.path }.uniq)
+  if (paths.isEmpty) {
+    found
+  } else {
+    let rows = goLintDeclarations(base, paths)
+    found.map { f =>
+      if (complexityLinters.contains(f.rule)) {
+        Finding(path: f.path, line: f.line, rule: f.rule, message: f.message + baselineNote(goSymbol(rows, goLintSource + "/" + f.path, f.line)))
+      } else {
+        f
+      }
     }
   }
 }
 
-let goLintIssues(source: Directory!, module: String!, output: String!): [Finding!]! {
+let goLintIssues(base: Container!, module: String!, output: String!): [Finding!]! {
   let label = moduleLabel(module)
   let shown = output.trimSpace
   if (!shown.hasPrefix("{") or !shown.hasSuffix("}")) {
@@ -322,20 +390,20 @@ let goLintIssues(source: Directory!, module: String!, output: String!): [Finding
   } else if (decoded.failedAt >= 0) {
     goLintRaiseIssue(module, decoded.failedAt)
   } else {
-    goLintSymbols(source, decoded.issues.map { issue, index => goLintFinding(module, issue, index) })
+    goLintSymbols(base, decoded.issues.map { issue, index => goLintFinding(module, issue, index) })
   }
 }
 
-let goLintProcessFindings(source: Directory!, module: String!, status: Int!, stdout: String!, stderr: String!): [Finding!]! {
+let goLintProcessFindings(base: Container!, module: String!, status: Int!, stdout: String!, stderr: String!): [Finding!]! {
   if (status != 0) {
     raise "go-lint: golangci-lint exited with status " + toString(status) + " in module " + moduleLabel(module) + ":\n" + stderr.trimSpace + "\n" + stdout.trimSpace
   }
-  goLintIssues(source, module, stdout)
+  goLintIssues(base, module, stdout)
 }
 
-let lintModule(source: Directory!, base: Container!, module: String!): [Finding!]! {
+let lintModule(base: Container!, module: String!): [Finding!]! {
   let ran = runGoLint(base, module)
-  goLintProcessFindings(source, module, ran.exitCode, ran.stdout, ran.stderr)
+  goLintProcessFindings(base, module, ran.exitCode, ran.stdout, ran.stderr)
 }
 
 let joinFindings(lists: [[Finding!]!]!): [Finding!]! {
@@ -349,13 +417,13 @@ let joinFindings(lists: [[Finding!]!]!): [Finding!]! {
   }
 }
 
-let goLintHits(source: Directory!, files: [String!]!): [Finding!]! {
-  let modules = goModules(files)
+let goLintHits(files: FileAccess!): [Finding!]! {
+  let modules = goModules(files.listed)
   if (modules.isEmpty) {
     []
   } else {
-    let base = goLintBase(source)
-    joinFindings(modules.map { module => lintModule(source, base, module) })
+    let base = goLintBase(goLintUpload(files, modules).tree)
+    joinFindings(modules.map { module => lintModule(base, module) })
   }
 }
 
@@ -415,6 +483,6 @@ let goLintOutcomeOf(hits: [Finding!]!, settings: Settings!): [Finding!]! {
   sortFindings(applyExceptions("go-lint", baselined.remaining, settings) + baselined.stale)
 }
 
-let goLintFindings(source: Directory!, files: [String!]!, settings: Settings!): [Finding!]! {
-  goLintOutcomeOf(goLintHits(source, files), settings)
+let goLintFindings(files: FileAccess!, settings: Settings!): [Finding!]! {
+  goLintOutcomeOf(goLintHits(files), settings)
 }

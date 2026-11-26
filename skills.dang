@@ -26,6 +26,27 @@ let instructionFile(agent: String!): String! {
   }
 }
 
+let skillParents: [String!]! = skillsDirectories.map { target => target.trimSuffix("/skills") }
+
+let skillInstructionFiles: [String!]! = fallbackAgents.map { agent => instructionFile(agent) }
+
+# Everything the installer reads: each agent directory as an entry (a real
+# directory, a symlink or a file), each skills directory with its contents, and
+# the root instruction files. The excludes drop the other children of an agent
+# directory and keep the skills directory, so nothing else in the workspace is
+# read. Ignore files are not applied: a skills directory is read whether or not
+# it is ignored.
+let skillViewInclude: [String!]! = skillParents + skillsDirectories + skillsDirectories.map { target => target + "/**" } + skillInstructionFiles
+
+let skillViewExclude: [String!]! = skillParents.map { agent => agent + "/*" } + skillsDirectories.map { target => "!" + target } + skillsDirectories.map { target => "!" + target + "/**" }
+
+# The part of the workspace the installer reads and writes, at its
+# workspace-relative paths. A Changeset between two trees built on it applies
+# at the workspace root.
+let skillFolders(ws: Workspace!): Directory! {
+  ws.directory("/", include: skillViewInclude, exclude: skillViewExclude)
+}
+
 let skillTargets(source: Directory!): [String!]! {
   let existing = skillsDirectories.filter { target =>
     isRealDirectory(source, target.trimSuffix("/skills")) and isRealDirectory(source, target)

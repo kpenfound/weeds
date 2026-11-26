@@ -4,11 +4,10 @@ severity: hint
 message: comment is not a doc comment on an exported identifier
 rule:
   all:
-    - kind: comment
-    - not:
-        matches: go-directive
+    - matches: go-plain-comment
     - any:
         - matches: go-in-function
+        - regex: '^.*ast_grep_ignore'
         - not:
             precedes:
               stopBy:

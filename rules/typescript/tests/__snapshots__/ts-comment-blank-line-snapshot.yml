@@ -1,0 +1,210 @@
+id: ts-comment-blank-line
+snapshots:
+  ? |
+    /**
+    //weeds-nl
+     * Run starts the work.
+    //weeds-nl
+     */
+    //weeds-nl
+
+    //weeds-nl
+    export function run(): void {}
+  : labels:
+    - source: |-
+        /**
+        //weeds-nl
+         * Run starts the work.
+        //weeds-nl
+         */
+      style: primary
+      start: 0
+      end: 53
+    - source: 'export function run(): void {}'
+      style: secondary
+      start: 77
+      end: 107
+    - source: //weeds-nl
+      style: secondary
+      start: 54
+      end: 64
+    - source: //weeds-nl
+      style: secondary
+      start: 66
+      end: 76
+  ? |
+    /** A CommonJS export. */
+    //weeds-nl
+
+    //weeds-nl
+    module.exports = { a: 1 };
+  : labels:
+    - source: /** A CommonJS export. */
+      style: primary
+      start: 0
+      end: 25
+    - source: module.exports
+      style: secondary
+      start: 49
+      end: 63
+    - source: 'module.exports = { a: 1 }'
+      style: secondary
+      start: 49
+      end: 74
+    - source: 'module.exports = { a: 1 };'
+      style: secondary
+      start: 49
+      end: 75
+    - source: //weeds-nl
+      style: secondary
+      start: 26
+      end: 36
+    - source: //weeds-nl
+      style: secondary
+      start: 38
+      end: 48
+  ? |
+    /** Legacy. */
+    //weeds-nl
+
+    //weeds-nl
+    exports.legacy = 1;
+  : labels:
+    - source: /** Legacy. */
+      style: primary
+      start: 0
+      end: 14
+    - source: exports.legacy
+      style: secondary
+      start: 38
+      end: 52
+    - source: exports.legacy = 1
+      style: secondary
+      start: 38
+      end: 56
+    - source: exports.legacy = 1;
+      style: secondary
+      start: 38
+      end: 57
+    - source: //weeds-nl
+      style: secondary
+      start: 15
+      end: 25
+    - source: //weeds-nl
+      style: secondary
+      start: 27
+      end: 37
+  ? |
+    /** Run starts the work. */
+    //weeds-nl
+
+    //weeds-nl
+    export function run(): void {}
+  : labels:
+    - source: /** Run starts the work. */
+      style: primary
+      start: 0
+      end: 27
+    - source: 'export function run(): void {}'
+      style: secondary
+      start: 51
+      end: 81
+    - source: //weeds-nl
+      style: secondary
+      start: 28
+      end: 38
+    - source: //weeds-nl
+      style: secondary
+      start: 40
+      end: 50
+  ? |
+    /** Run starts the work. */
+    //weeds-nl
+    // @ts-check
+    //weeds-nl
+
+    //weeds-nl
+    export function run(): void {}
+  : labels:
+    - source: /** Run starts the work. */
+      style: primary
+      start: 0
+      end: 27
+    - source: 'export function run(): void {}'
+      style: secondary
+      start: 75
+      end: 105
+    - source: //weeds-nl
+      style: secondary
+      start: 52
+      end: 62
+    - source: //weeds-nl
+      style: secondary
+      start: 64
+      end: 74
+  ? |
+    export class Foo {
+    //weeds-nl
+      /** A field. */
+    //weeds-nl
+
+    //weeds-nl
+      a = 1;
+    //weeds-nl
+    }
+  : labels:
+    - source: /** A field. */
+      style: primary
+      start: 32
+      end: 47
+    - source: |-
+        export class Foo {
+        //weeds-nl
+          /** A field. */
+        //weeds-nl
+
+        //weeds-nl
+          a = 1;
+        //weeds-nl
+        }
+      style: secondary
+      start: 0
+      end: 92
+    - source: |-
+        class Foo {
+        //weeds-nl
+          /** A field. */
+        //weeds-nl
+
+        //weeds-nl
+          a = 1;
+        //weeds-nl
+        }
+      style: secondary
+      start: 7
+      end: 92
+    - source: |-
+        {
+        //weeds-nl
+          /** A field. */
+        //weeds-nl
+
+        //weeds-nl
+          a = 1;
+        //weeds-nl
+        }
+      style: secondary
+      start: 17
+      end: 92
+    - source: a = 1
+      style: secondary
+      start: 73
+      end: 78
+    - source: //weeds-nl
+      style: secondary
+      start: 48
+      end: 58
+    - source: //weeds-nl
+      style: secondary
+      start: 60
+      end: 70

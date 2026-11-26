@@ -1,0 +1,8 @@
+git-ignored/
+dot-ignored/
+rg-ignored/
+info-excluded/
+sub/nested-git/
+sub/nested-dot/
+sub/nested-rg/
+worktrees/

@@ -1,0 +1,8 @@
+id: ts-plain-comment
+language: TypeScript
+rule:
+  kind: comment
+  not:
+    any:
+      - matches: ts-directive
+      - matches: ts-newline
