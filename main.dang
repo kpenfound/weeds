@@ -7,7 +7,7 @@ so ignored files are left out. No check evaluates the whole workspace.
 type Weeds {
   """
   The complete consumer workspace as a Directory. Scan exclusions never apply
-  to it, and it is never evaluated by the scanning checks.
+  to it. No check, installed-skills and generate included, evaluates it.
   """
   pub source: Directory!
 
@@ -24,6 +24,10 @@ type Weeds {
     self.workspace = ws
     self.skillInput = skillSource
     self
+  }
+
+  let skillView: Directory! {
+    skillFolders(workspace)
   }
 
   let skillTree: Directory! {
@@ -124,6 +128,15 @@ type Weeds {
   """
   pub ripgrepGuard(submatchCounts: [Int!]!): String! {
     { requireRipgrep(submatchCounts); "ok" } rescue { err: Error => err.message }
+  }
+
+  """
+  The tree installed-skills and generate read, for weeds-tests: its files and
+  symlinks, sorted. Only the skills directories, their agent directories and
+  the root instruction files are in it.
+  """
+  pub skillViewEntries: [String!]! {
+    sortStrings(skillView.glob("**/*").map { path => path.trimPrefix("./") })
   }
 
   """
@@ -380,22 +393,22 @@ type Weeds {
   removed. weeds.toml [skills] subset picks the skills; the default is all seven.
   """
   pub generate: Changeset! @generate {
-    let targets = skillTargets(source)
+    let targets = skillTargets(skillView)
     if (targets.isEmpty) {
       raise "dagger generate has nowhere to install skills: create a skills directory such as .agents/skills or .claude/skills, or add AGENTS.md or CLAUDE.md"
     }
     checkSkillSource(skillTree, settings.skills)
-    installChanges(source, skillTree, targets, settings.skills)
+    installChanges(skillView, skillTree, targets, settings.skills)
   }
 
   let installedSkillsOutcome: [Finding!]! {
-    let targets = skillTargets(source)
+    let targets = skillTargets(skillView)
     let found: [Finding!]! = []
     if (!targets.isEmpty) {
       checkSkillSource(skillTree, settings.skills)
-      let conflicts = installConflicts(source, targets, settings.skills)
+      let conflicts = installConflicts(skillView, targets, settings.skills)
       if (conflicts.isEmpty) {
-        found = changeFindings(installChanges(source, skillTree, targets, settings.skills))
+        found = changeFindings(installChanges(skillView, skillTree, targets, settings.skills))
       } else {
         found = conflictFindings(conflicts)
       }

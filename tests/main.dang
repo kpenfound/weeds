@@ -53,6 +53,36 @@ type WeedsTests {
   }
 
   """
+  installed-skills and generate read only the skill folders: the skills
+  directories with their contents, their agent directories as bare entries (a
+  real directory, a symlink or a file), and AGENTS.md and CLAUDE.md. Nothing
+  else in the workspace is in their tree, ignored or not, and a changeset
+  between two trees built on it applies at the workspace root with the same
+  paths.
+  """
+  pub skillView: Void @check {
+    let tree = directory
+      .withNewFile("AGENTS.md", "x\n")
+      .withNewFile("README.md", "x\n")
+      .withNewFile("src/main.go", "x\n")
+      .withNewFile(".gitignore", ".cursor/skills\n")
+      .withNewFile(".agents/other/f.txt", "x\n")
+      .withNewFile(".agents/skills/a/SKILL.md", "x\n")
+      .withNewFile(".claude/other.txt", "x\n")
+      .withNewFile(".cursor/real.txt", "x\n")
+      .withNewFile(".cursor/skills/b/SKILL.md", "x\n")
+      .withNewFile("elsewhere/f.txt", "x\n")
+      .withSymlink("elsewhere", ".gemini")
+      .withNewFile(".github/workflows/ci.yml", "x\n")
+      .withNewFile(".github/skills", "file\n")
+      .withNewFile(".opencode/x", "x\n")
+      .withSymlink("../.agents/skills", ".opencode/skills")
+    let expected = ["AGENTS.md", ".agents/", ".agents/skills/", ".agents/skills/a/", ".agents/skills/a/SKILL.md", ".claude/", ".cursor/", ".cursor/skills/", ".cursor/skills/b/", ".cursor/skills/b/SKILL.md", ".gemini", ".github/", ".github/skills", ".opencode/", ".opencode/skills"]
+    sameList("the skill view", sortRows(expected), weeds(ws: tree.asWorkspace).skillViewEntries)
+    null
+  }
+
+  """
   Config loading, validation and the shared exception evaluator.
   """
   pub config: Void @check {
@@ -627,7 +657,7 @@ type WeedsTests {
     ["skill-modified", ".claude/skills/no-deltas/SKILL.md", "skill-removed", ".agents/skills/unslop/extra.txt", "skill-added", ".agents/skills/no-deltas/SKILL.md"].each { part =>
       expect(failure.contains(part), "the check must report " + part + ", got: " + failure)
     }
-    let restored = broken.generate.after
+    let restored = edited.withChanges(broken.generate)
     expect(restored.file(".claude/skills/no-deltas/SKILL.md").contents == skillSource("full").file("no-deltas/SKILL.md").contents, "generate must restore a hand-edited owned file")
     expect(!restored.exists(".agents/skills/unslop/extra.txt"), "generate must remove an extra file from an owned folder")
     expect(restored.exists(".agents/skills/no-deltas/SKILL.md"), "generate must restore a deleted file in an owned folder")
@@ -861,7 +891,7 @@ type WeedsTests {
       expect(installed.contains(".agents/skills/no-deltas/" + name), "installed-skills must report the hand edit to " + name + ", got:\n" + installed)
     }
     let changes = subject.generate
-    let restored = weeds(ws: changes.after.asWorkspace, skillSource: source)
+    let restored = weeds(ws: tree.withChanges(changes).asWorkspace, skillSource: source)
     expect(restored.installedSkillsReport == "no findings", "generate must restore every owned folder, got:\n" + restored.installedSkillsReport)
     (scans + [section("go-lint", checkResult(subject.goLint)), installed, section("generate", describeChanges(changes))]).join("\n\n")
   }
