@@ -688,6 +688,22 @@ type WeedsTests {
   }
 
   """
+  One workspace with a file ignored by each of .gitignore, .ignore, .rgignore, a
+  nested ignore file and .git/info/exclude, each holding a directive, bad
+  comments, internal markdown and Go lint issues, and an ignored full copy of
+  the workspace with its own go.mod, through the real entry points of all five
+  checks and the installer. No ignored file yields a finding, the violations
+  in files nothing ignores are still reported, goLintModules omits the copy's
+  module, and the files the search, the comments upload, the markdown listing
+  and the go-lint upload see agree. The global git excludes of the machine
+  that runs dagger cannot be set from a module; tests/fixtures/ignore-probe
+  shows them with a host run.
+  """
+  pub ignoreFiles: Void @check {
+    runSuite("ignore-files")
+  }
+
+  """
   A module that does not build cannot be linted: go-lint raises instead of
   passing. The broken module is built here so no committed fixture breaks the
   repository's own go-lint run.
@@ -896,6 +912,88 @@ type WeedsTests {
     (scans + [section("go-lint", checkResult(subject.goLint)), installed, section("generate", describeChanges(changes))]).join("\n\n")
   }
 
+  let commentSuffixes: [String!]! = [".go", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+
+  let commentUploadGlobs: [String!]! = commentSuffixes.map { suffix => "**/*" + suffix }
+
+  let markdownListGlobs: [String!]! = ["**/*.[mM][dD]", "**/*.[mM][aA][rR][kK][dD][oO][wW][nN]", "**/*.[mM][dD][xX]"]
+
+  let hasAnySuffix(path: String!, suffixes: [String!]!): Boolean! {
+    suffixes.any { suffix => path.hasSuffix(suffix) }
+  }
+
+  let isBuildFile(path: String!): Boolean! {
+    hasAnySuffix(path, [".go", "/go.mod", "/go.sum", "/go.work", "/go.work.sum"]) or ["go.mod", "go.sum", "go.work", "go.work.sum"].contains(path)
+  }
+
+  let underAny(path: String!, prefixes: [String!]!): Boolean! {
+    prefixes.any { prefix => path.hasPrefix(prefix) }
+  }
+
+  let noneIgnored(label: String!, ignored: [String!]!, paths: [String!]!): Void {
+    let leaked = paths.filter { path => underAny(path, ignored) }
+    expect(leaked.isEmpty, label + " holds ignored files:\n" + leaked.join("\n"))
+  }
+
+  let ignoreFilesReport(caseDir: Directory!, workspace: Directory!): String! {
+    let source = skillSource("full")
+    let installed = ownedFolders(workspace, source, ["no-deltas", "unslop"])
+    let copy = installed.withoutDirectory(".git").withNewFile(".git", "gitdir: ../../.git/worktrees/copy\n")
+    let tree = installed.withDirectory("worktrees/copy", copy)
+    let subject = weeds(ws: tree.asWorkspace, skillSource: source)
+    let ignored = fragmentLines(caseDir.file("ignored.txt").contents)
+    expect(tree.exists("worktrees/copy/go.mod") and tree.exists("git-ignored/bad.go") and tree.exists("worktrees/copy/info-excluded/bad.go"), "the fixture must hold the ignored files and the copy it is meant to leave out")
+
+    let scanned = subject.scanFiles
+    expect(scanned.length > 0 and scanned.contains("app/app.go") and scanned.contains(".hidden/hidden.ts"), "the scan must see the files nothing ignores, hidden ones included, got:\n" + scanned.join("\n"))
+    noneIgnored("the scan", ignored, scanned)
+    let searched = sortRows(subject.searchRows(".", []).map { row => row.split(":")[0]! }.uniq)
+    sameList("the files a search for any character sees", scanned, searched)
+    sameList("the files the shared upload holds", scanned, subject.uploadedFiles([]))
+    sameList("the files the shared upload was built from", scanned, subject.uploadList([]))
+
+    let comments = scanned.filter { path => hasAnySuffix(path, commentSuffixes) }
+    expect(comments.length > 0, "the comments upload must not be empty")
+    sameList("the files the comments upload holds", comments, subject.uploadedFiles(commentUploadGlobs))
+    sameList("the files the comments upload was built from", comments, subject.uploadList(commentUploadGlobs))
+
+    let markdown = scanned.filter { path => path.hasSuffix(".md") }
+    sameList("the markdown candidates, empty files included", markdown, subject.listedFiles(markdownListGlobs))
+
+    let uploaded = subject.goLintUploadedFiles
+    let build = uploaded.filter { path => isBuildFile(path) }
+    sameList("the go-lint upload's Go sources and module files", scanned.filter { path => isBuildFile(path) }, build)
+    noneIgnored("the go-lint upload's Go sources and module files", ignored, build)
+    let extras = uploaded.filter { path => !isBuildFile(path) and !scanned.contains(path) }
+    noneIgnored("the go-lint upload's other files", ["worktrees/"], extras)
+    expect(subject.goLintModules == ["."], "an ignored copy's go.mod must not add a module, got: " + subject.goLintModules.join(", "))
+
+    let bare = gitMarked(caseDir.directory("workspace"))
+    let bareTree = bare.withDirectory("worktrees/copy", bare)
+    let control = weeds(ws: bareTree.asWorkspace, skillSource: source)
+    expect(control.goLintModules.contains("worktrees/copy"), "without its ignore files the copy's go.mod must be a module, got: " + control.goLintModules.join(", "))
+    let lit = control.suppressionsReport + "\n" + control.markdownReport
+    ignored.each { prefix =>
+      expect(lit.contains(prefix), "without its ignore files the fixture must report files under " + prefix + ", so that their absence above is the ignore handling; got:\n" + lit)
+    }
+
+    let scans = [
+      section("comments", checkResult(subject.comments))
+      section("suppressions", checkResult(subject.suppressions))
+      section("markdown", checkResult(subject.markdown))
+      section("go-lint", checkResult(subject.goLint))
+    ]
+    scans.each { scan =>
+      noneIgnored("a check's findings", ignored, scan.split("\n").filter { row => row.contains(":") and !row.hasPrefix("==") })
+    }
+    let installer = section("installed-skills", checkResult(subject.installedSkills))
+    (
+      [section("files seen", scanned.join("\n")), section("go-lint modules", subject.goLintModules.join("\n"))]
+      + scans
+      + [installer, section("generate", describeChanges(subject.generate)), section("go-lint upload beyond the scan list", extras.join("\n"))]
+    ).join("\n\n")
+  }
+
   let section(name: String!, body: String!): String! {
     "== " + name + " ==\n" + body
   }
@@ -966,6 +1064,7 @@ type WeedsTests {
       "golint" => subject.goLintReport
       "generate" => describeChanges(subject.generate)
       "consumer" => consumerReport(caseDir, workspace)
+      "ignore-files" => ignoreFilesReport(caseDir, workspace)
       "installed-skills" => {
         let report = subject.installedSkillsReport
         let passed = subject.installedSkills.pass

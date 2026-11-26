@@ -2,9 +2,10 @@
 
 Probed with dagger v1.0.0-beta.27 and ripgrep 14.1.1. The in-module probes
 (`dagger call weeds-tests ignore-probes`, `scan-ignored`, `file-layer`,
-`listed-with-empty`) cover every source a module can express. The global git
-excludes cannot be set from inside a module, so `global-excludes.sh` shows them
-on a real host workspace.
+`listed-with-empty`, `ignore-files`) cover every source a module can express.
+The global git excludes cannot be set from inside a module, so
+`global-excludes.sh` shows them on a real host workspace, through the real
+check entry points.
 
 ## Findings
 
@@ -44,26 +45,56 @@ from the search list and the two agree.
 ## Recorded run
 
 `global-excludes.sh` copies the module into a scratch workspace with a minimal
-`.git` directory whose `info/exclude` names `info-excluded.dat`, writes
-`kept.dat`, `info-excluded.dat` and `global-excluded.dat` (each holding the
-searched text), and runs `host-ignore-report` with `HOME` set to a scratch home.
+`.git` directory and runs dagger with `HOME` set to a scratch home, once with no
+global excludes, once with `$HOME/.config/git/ignore` (the XDG default) and once
+with `core.excludesFile`. The workspace's `.git/info/exclude` names
+`info-excluded.*`, and also the module's own files so that the scans see only
+the files below. For each of `kept`, `info-excluded` and `global-excluded` it
+writes a `.dat` file holding the searched text, a `.ts` file with a
+suppression directive and a bad comment, an internal `.md` file and a `.go`
+file with an unchecked error, plus a root `go.mod`. It then runs the
+`host-ignore-report` test entry point and the real entry points `weeds
+go-lint-modules`, `suppressions-report`, `markdown-report`, `comments-report`
+and `go-lint-report`. The three global-excludes runs differ only in
+`global-excluded.*`.
 
 ```
 == global excludes: none
 search: global-excluded.dat:1 kept.dat:1
 shared upload: global-excluded.dat kept.dat
 plain upload with gitignore: global-excluded.dat info-excluded.dat kept.dat
-== global excludes: xdg-default
+-- go-lint-modules
+.
+-- suppressions-report
+global-excluded.ts:1: ts-ignore: ...
+kept.ts:1: ts-ignore: ...
+-- markdown-report
+global-excluded.md:1: internal-markdown: ...
+kept.md:1: internal-markdown: ...
+-- comments-report
+global-excluded.ts:1: ts-comment-not-doc: ...
+kept.ts:1: ts-comment-not-doc: ...
+-- go-lint-report
+global-excluded.go:7: errcheck: Error return value of `os.Remove` is not checked
+kept.go:7: errcheck: Error return value of `os.Remove` is not checked
+== global excludes: xdg-default      (core-excludesfile prints the same)
 search: kept.dat:1
 shared upload: kept.dat
 plain upload with gitignore: global-excluded.dat info-excluded.dat kept.dat
-== global excludes: core-excludesfile
-search: kept.dat:1
-shared upload: kept.dat
-plain upload with gitignore: global-excluded.dat info-excluded.dat kept.dat
+-- go-lint-modules
+.
+-- suppressions-report
+kept.ts:1: ts-ignore: ...
+-- markdown-report
+kept.md:1: internal-markdown: ...
+-- comments-report
+kept.ts:1: ts-comment-not-doc: ...
+-- go-lint-report
+kept.go:7: errcheck: Error return value of `os.Remove` is not checked
 ```
 
-`info-excluded.dat` is absent from the search and the shared upload in every
-run. `global-excluded.dat` is absent from both once the scratch home names it
-through `.config/git/ignore` or through `core.excludesFile`. The plain upload
-keeps both files, which is why weeds does not use it.
+`info-excluded.*` gives no finding and no search or upload entry in any run.
+`global-excluded.*` gives none once the scratch home names it through
+`.config/git/ignore` or through `core.excludesFile`, and the real checks,
+the search and the shared upload agree. The plain upload keeps both files,
+which is why Weeds does not use it.
