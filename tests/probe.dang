@@ -1,0 +1,67 @@
+# Workspace.search and Workspace.directory behaviour that the shared file layer
+# relies on, observed through the real engine on in-memory workspaces. The
+# global git excludes cannot be set from here: see tests/fixtures/ignore-probe.
+
+let needleTree(base: Directory!): Directory! {
+  base
+    .withNewFile(".gitignore", "git-ignored.txt\n")
+    .withNewFile(".ignore", "dot-ignored.txt\n")
+    .withNewFile(".rgignore", "rg-ignored.txt\n")
+    .withNewFile("sub/.gitignore", "nested-git.txt\n")
+    .withNewFile("sub/.ignore", "nested-dot.txt\n")
+    .withNewFile("sub/.rgignore", "nested-rg.txt\n")
+    .withNewFile("plain.txt", "needle\n")
+    .withNewFile(".hidden.txt", "needle\n")
+    .withNewFile("git-ignored.txt", "needle\n")
+    .withNewFile("dot-ignored.txt", "needle\n")
+    .withNewFile("rg-ignored.txt", "needle\n")
+    .withNewFile("sub/plain.txt", "needle\n")
+    .withNewFile("sub/git-ignored.txt", "needle\n")
+    .withNewFile("sub/nested-git.txt", "needle\n")
+    .withNewFile("sub/nested-dot.txt", "needle\n")
+    .withNewFile("sub/nested-rg.txt", "needle\n")
+    .withNewFile("other/nested-git.txt", "needle\n")
+}
+
+let excludeTree(base: Directory!): Directory! {
+  base
+    .withNewFile(".git/info/exclude", "excluded.txt\nsub/excluded-sub.txt\n")
+    .withNewFile("control.txt", "needle\n")
+    .withNewFile("excluded.txt", "needle\n")
+    .withNewFile("sub/excluded-sub.txt", "needle\n")
+    .withNewFile("other/excluded.txt", "needle\n")
+}
+
+let gitHead = "ref: refs/heads/main\n"
+
+let sortedJoin(paths: [String!]!): String! {
+  sortRows(paths).join(" ")
+}
+
+let searchedPaths(ws: Workspace!, skipIgnored: Boolean!, globs: [String!]!): String! {
+  sortedJoin(ws.search(pattern: "needle", skipIgnored: skipIgnored, globs: globs).{{filePath}}.map { r => r.filePath })
+}
+
+let uploadedPaths(dir: Directory!): String! {
+  sortedJoin(dir.glob("**/*").filter { p => !p.hasSuffix("/") }.map { p => p.trimPrefix("./") })
+}
+
+let oneResultPerFile(ws: Workspace!): [String!]! {
+  sortRows(ws.search(pattern: "\\A", skipIgnored: true, multiline: true).{{filePath, lineNumber, submatches.{{start}}}}.map { r =>
+    r.filePath + ":" + toString(r.lineNumber) + ":" + toString(r.submatches.length)
+  })
+}
+
+let kindsTree(): Directory! {
+  directory
+    .withNewFile("empty.txt", "")
+    .withNewFile("newline.txt", "\n")
+    .withNewFile("text.txt", "hello\n")
+    .withNewFile("nonl.txt", "no newline")
+    .withNewFile("nul-first.bin", "\u0000abc\n")
+    .withNewFile("nul-later.bin", "abc\ndef\u0000ghi\n")
+}
+
+let filesOnlyPaths(ws: Workspace!): String! {
+  sortedJoin(ws.search(pattern: "\\A", skipIgnored: true, filesOnly: true, multiline: true).{{filePath}}.map { r => r.filePath })
+}

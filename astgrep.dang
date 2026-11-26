@@ -51,10 +51,7 @@ let scanWithPack(scanDir: Directory!, pack: Directory!): [SgMatch!]! {
   }
 }
 
-let scanComments(source: Directory!): [SgMatch!]! {
-  let owned = findOwnedFolders(source)
-  let files = walkFiles(source)
-  let scanDir = scanRoot(source, owned)
+let scanComments(scanDir: Directory!, files: [String!]!): [SgMatch!]! {
   let found: [SgMatch!]! = []
   if (files.any { f => f.hasSuffix(".go") }) {
     found += scanWithPack(scanDir, rulePackSource("go")).filter { m => m.file.hasSuffix(".go") }
@@ -95,10 +92,10 @@ let groupByFile(matches: [SgMatch!]!): Map[[SgMatch!]!]! {
   groups
 }
 
-let commentsFor(source: Directory!): [Finding!]! {
-  let found = scanComments(source)
+let commentsFor(scanDir: Directory!, files: [String!]!): [Finding!]! {
+  let found = scanComments(scanDir, files)
   let groups = groupByFile(found)
   concatFindings(commentFilesOf(found).map { path =>
-    commentFindings(path, source.file(path).contents, groups[path] ?? [])
+    commentFindings(path, scanDir.file(path).contents, groups[path] ?? [])
   })
 }

@@ -8,30 +8,39 @@ let isRealFile(source: Directory!, path: String!): Boolean! {
   source.exists(path, expectedType: ExistsType.REGULAR_TYPE, doNotFollowSymlinks: true)
 }
 
-let mergeStrings(left: [String!]!, right: [String!]!): [String!]! {
-  let i = 0
-  let j = 0
-  (left + right).map { slot =>
-    if (j >= right.length or (i < left.length and left[i]! <= right[j]!)) {
-      let next = left[i]!
-      i += 1
-      next
+let medianOf(a: String!, b: String!, c: String!): String! {
+  if (a < b) {
+    if (b < c) {
+      b
+    } else if (a < c) {
+      c
     } else {
-      let next = right[j]!
-      j += 1
-      next
+      a
     }
+  } else if (a < c) {
+    a
+  } else if (b < c) {
+    c
+  } else {
+    b
   }
 }
 
+# Ascending byte order. A three-way quicksort: each level is two native filters
+# and one concatenation, so no list is rebuilt one element at a time.
 let sortStrings(items: [String!]!): [String!]! {
   if (items.length <= 1) {
     items
   } else {
-    let middle = items.length / 2
-    mergeStrings(sortStrings(items.takeFirst(middle)), sortStrings(items.dropFirst(middle)))
+    let pivot = medianOf(items[0]!, items[items.length / 2]!, items[items.length - 1]!)
+    let below = items.filter { item => item < pivot }
+    let above = items.filter { item => item > pivot }
+    let tied = items.length - below.length - above.length
+    sortStrings(below) + items.takeFirst(tied).map { item => pivot } + sortStrings(above)
   }
 }
+
+let ownershipGlobs: [String!]! = skillsDirectories.map { target => target + "/*/" + markerFile }
 
 let ownedIn(source: Directory!, target: String!): [String!]! {
   let agent = target.trimSuffix("/skills")
@@ -48,35 +57,297 @@ let ownedIn(source: Directory!, target: String!): [String!]! {
 }
 
 let findOwnedFolders(source: Directory!): [String!]! {
-  let none: [String!]! = []
-  skillsDirectories.reduce(none) { owned, target => mergeStrings(owned, sortStrings(ownedIn(source, target))) }
+  sortStrings(joinStrings(skillsDirectories.map { target => ownedIn(source, target) }))
 }
 
-let scanRoot(source: Directory!, owned: [String!]!): Directory! {
-  source.filter(exclude: skippedNames + skippedNames.map { name => "**/" + name } + owned)
-}
-
-let skipsPath(path: String!, owned: [String!]!): Boolean! {
-  path.split("/").any { part => skippedNames.contains(part) } or owned.any { folder => path == folder or path.hasPrefix(folder + "/") }
-}
-
-let withoutDirectories(listed: [String!]!): [String!]! {
-  if (listed.any { path => path.hasSuffix("/") }) {
-    listed.filter { path => !path.hasSuffix("/") }
+# A path as a literal in a Workspace.directory include or exclude pattern and in
+# a ripgrep glob.
+let escapeGlob(path: String!): String! {
+  let escaped = ["\\", "*", "?", "[", "]", "{", "}"].reduce(path) { text, ch => text.replace(ch, "\\" + ch) }
+  if (escaped.hasPrefix("!") or escaped.hasPrefix("#")) {
+    "\\" + escaped
   } else {
-    let directories: Map[Boolean!]! = [:]
-    listed.each { path =>
-      let parts = path.split("/")
-      parts.dropLast.each { part, index =>
-        directories = directories.with(parts.takeFirst(index + 1).join("/"), true)
-      }
-    }
-    listed.filter { path => !directories.has(path) }
+    escaped
   }
 }
 
-let walkFiles(source: Directory!): [String!]! {
-  let owned = findOwnedFolders(source)
-  let listed = scanRoot(source, owned).glob("**/*").map { path => path.trimPrefix("./") }
-  sortStrings(withoutDirectories(listed).filter { path => !skipsPath(path, owned) })
+let ignoreSourceGlobs: [String!]! = ["**/.gitignore", "**/.ignore", "**/.rgignore", ".git/info/exclude"]
+
+let ripgrepRequired = "weeds needs ripgrep (rg) on the machine that runs dagger: Workspace.search fell back to grep, which ignores .gitignore, .ignore, .rgignore and git excludes, so weeds would scan ignored files. Install ripgrep and run again."
+
+# Fails naming ripgrep when any search result lacks submatches. ripgrep reports
+# at least one submatch for every line it returns; the grep fallback reports
+# none. Takes the submatch count of each result.
+let requireRipgrep(submatchCounts: [Int!]!): Void {
+  if (submatchCounts.any { count => count == 0 }) {
+    raise ripgrepRequired
+  }
+  null
+}
+
+"""
+One matched line, with a workspace-relative path.
+"""
+type SearchHit {
+  path: String!
+  line: Int!
+  text: String!
+}
+
+"""
+A Directory holding exactly the listed files. files is the list the Directory
+was built from: the caller's one pass.
+"""
+type Upload {
+  files: [String!]!
+  tree: Directory!
+}
+
+# Tagged strings that sort a path's "in A" entry just before its "in B" entry,
+# so one sort and one pass over neighbours give set differences without a
+# lookup per element. Each list holds a path at most once.
+let inFirst = "\x01a"
+
+let inSecond = "\x01b"
+
+let taggedSorted(first: [String!]!, second: [String!]!): [String!]! {
+  sortStrings(first.map { path => path + inFirst } + second.map { path => path + inSecond })
+}
+
+# The paths of second that first does not hold, in sorted order.
+let onlyInSecond(first: [String!]!, second: [String!]!): [String!]! {
+  if (second.isEmpty) {
+    []
+  } else if (first.isEmpty) {
+    sortStrings(second)
+  } else {
+    let tagged = taggedSorted(first, second)
+    tagged
+      .map { entry, position =>
+        if (entry.hasSuffix(inSecond)) {
+          let path = entry.trimSuffix(inSecond)
+          if (position > 0 and tagged[position - 1]! == path + inFirst) { "" } else { path + inSecond }
+        } else {
+          ""
+        }
+      }
+      .filter { entry => entry != "" }
+      .map { entry => entry.trimSuffix(inSecond) }
+  }
+}
+
+let anyGlob(globs: [String!]!): String! {
+  globs.map { glob => "(?:" + globPattern(glob) + ")" }.join("|")
+}
+
+let selectPaths(paths: [String!]!, globs: [String!]!): [String!]! {
+  if (globs.isEmpty) {
+    paths
+  } else {
+    let matcher = anyGlob(globs)
+    paths.filter { path => path.containsMatch(`${matcher}`) }
+  }
+}
+
+"""
+The shared file layer. Every part works from the Workspace and never evaluates
+a whole-workspace Directory.
+
+Scanned files are those ripgrep sees: not matched by .gitignore, .ignore,
+.rgignore (nested ones included), .git/info/exclude or the global git excludes
+of the machine that runs dagger, and not under .git, vendor, node_modules or a
+Weeds-owned skill folder. Hidden files are scanned. Search results and uploads
+agree because an upload is built from the file list of one ripgrep search.
+"""
+type FileAccess {
+  let workspace: Workspace!
+
+  new(ws: Workspace!) {
+    self.workspace = ws
+    self
+  }
+
+  """
+  Policy: the Weeds-owned skill folders, read from their ownership markers only.
+  """
+  owned: [String!]! {
+    findOwnedFolders(workspace.directory("/", include: ownershipGlobs))
+  }
+
+  """
+  Policy: ripgrep globs that leave out the skipped names and the owned folders.
+  Negated globs keep ignore rules in force; positive ones would re-include
+  ignored files, so include globs are never passed to ripgrep.
+  """
+  skipGlobs: [String!]! {
+    skippedNames.map { name => "!**/" + escapeGlob(name) } + owned.map { folder => "!" + escapeGlob(folder) }
+  }
+
+  """
+  Capability probe: true when Workspace.search on the dagger host is backed by
+  ripgrep. The grep fallback treats the negated policy globs as include
+  filters and returns nothing, and it ignores every ignore file, so a missing
+  ripgrep must be found before the policy is applied. One search, limited to a
+  single result, that carries no globs; evaluated once and shared by every
+  search of this workspace.
+  """
+  hostRipgrep: Boolean! {
+    let probe = workspace
+      .search(pattern: ".", paths: ["/"], skipIgnored: true, limit: 1)
+      .{{submatches.{{start}}}}
+    !probe.any { hit => hit.submatches.length == 0 }
+  }
+
+  """
+  The workspace every search runs on: the consumer's own, after the probe has
+  shown that its search is backed by ripgrep. Fails naming ripgrep otherwise, so
+  that no search applies the policy to a grep fallback that would return nothing
+  or scan ignored files.
+  """
+  searchable: Workspace! {
+    if (!hostRipgrep) {
+      raise ripgrepRequired
+    }
+    workspace
+  }
+
+  """
+  Search helper: one Workspace.search for a ripgrep pattern, with the policy and
+  ignore files applied, returning matched lines whose path matches one of the
+  weeds.toml-style include globs (all files when none are given).
+  """
+  search(pattern: String!, globs: [String!]! = [], multiline: Boolean! = false): [SearchHit!]! {
+    let found = searchable
+      .search(pattern: pattern, paths: ["/"], globs: skipGlobs, skipIgnored: true, multiline: multiline)
+      .{{filePath, lineNumber, matchedLines, submatches.{{start}}}}
+    requireRipgrep(found.map { hit => hit.submatches.length })
+    let hits = found.map { hit =>
+      SearchHit(path: hit.filePath.trimPrefix("./"), line: hit.lineNumber, text: hit.matchedLines.trimSuffix("\n"))
+    }
+    if (globs.isEmpty) {
+      hits
+    } else {
+      let matcher = anyGlob(globs)
+      hits.filter { hit => hit.path.containsMatch(`${matcher}`) }
+    }
+  }
+
+  """
+  The files every other part of the layer starts from: one search that returns
+  each non-empty text file once, unsorted. Empty files and files with NUL bytes
+  are not listed because ripgrep never matches them.
+  """
+  listed: [String!]! {
+    let found = searchable
+      .search(pattern: "\\A", paths: ["/"], globs: skipGlobs, skipIgnored: true, multiline: true)
+      .{{filePath, submatches.{{start}}}}
+    requireRipgrep(found.map { hit => hit.submatches.length })
+    found.map { hit => hit.filePath.trimPrefix("./") }
+  }
+
+  """
+  Upload helper: a Directory holding the listed files that match the include
+  globs (all of them when none are given). Sorted so that the Directory is the
+  same on every run.
+  """
+  upload(globs: [String!]! = []): Upload! {
+    uploadOf(listed, globs)
+  }
+
+  """
+  The upload helper for a file list the caller already holds, for example one
+  derived from its own search.
+  """
+  uploadOf(paths: [String!]!, globs: [String!]! = []): Upload! {
+    let files = sortStrings(selectPaths(paths, globs))
+    if (files.isEmpty) {
+      Upload(files: files, tree: directory)
+    } else {
+      Upload(files: files, tree: workspace.directory("/", include: files.map { path => escapeGlob(path) }))
+    }
+  }
+
+  """
+  Direct-upload patterns for the policy: the skipped names and the owned
+  skill folders.
+  """
+  skipExcludes: [String!]! {
+    skippedNames.map { name => "**/" + name } + owned.map { folder => escapeGlob(folder) }
+  }
+
+  """
+  The repository's own ignore sources, as a Directory: every .gitignore, .ignore
+  and .rgignore (nested ones included) and .git/info/exclude, with nothing else.
+  """
+  ignoreSources: Directory! {
+    workspace.directory("/", include: ignoreSourceGlobs, exclude: ["**/vendor", "**/node_modules"], gitignore: true)
+  }
+
+  """
+  Listing helper for the files matching include globs, empty files included:
+  the files the search sees, plus the empty files that no repository ignore
+  file hides. The extra pass is a Workspace.directory listing limited to the
+  globs (ripgrep never reports an empty file) whose unlisted entries are
+  checked against ignoreSources in a small in-engine workspace holding only
+  those entries. Use narrow globs. Not honoured for an empty file: the global
+  git excludes of the machine that runs dagger, which no in-engine check can
+  read.
+  """
+  listedWithEmpty(globs: [String!]!): [String!]! {
+    let seen = selectPaths(listed, globs)
+    let wanted = directFiles(globs)
+    let extras = onlyInSecond(seen, wanted)
+    sortStrings(seen + emptyFilesOf(extras))
+  }
+
+  let directFiles(globs: [String!]!): [String!]! {
+    workspace
+      .directory("/", include: globs, exclude: skipExcludes, gitignore: true)
+      .glob("**/*")
+      .map { path => path.trimPrefix("./") }
+      .filter { path => !path.hasSuffix("/") }
+  }
+
+  # Of paths the search did not list, those that are empty and that no
+  # repository ignore file hides: a path is not listed either because it is
+  # empty, because an ignore source hides it, or (non-empty) because a global
+  # git exclude hides it. A placeholder in each path's place shows which are
+  # hidden by an ignore source; the real files show which of the rest hold text.
+  let emptyFilesOf(paths: [String!]!): [String!]! {
+    if (paths.isEmpty) {
+      []
+    } else {
+      let rules = ignoreSources.withNewFile(".git/HEAD", "ref: refs/heads/main\n")
+      let placeholders = paths.reduce(rules) { dir, path => dir.withNewFile(path, "x\n") }
+      let real = rules.withDirectory("/", workspace.directory("/", include: paths.map { path => escapeGlob(path) }))
+      let notHidden = FileAccess(ws: placeholders.asWorkspace).listed
+      let withText = FileAccess(ws: real.asWorkspace).listed
+      onlyInSecond(withText, notHidden)
+    }
+  }
+
+  """
+  Upload helper with support files: the upload for the include globs, plus the
+  files matching supportGlobs from a direct Workspace.directory upload with
+  .gitignore applied. Support files need no search listing (an empty or binary
+  file ripgrep never lists is held), at the cost that one hidden only by
+  .ignore, .rgignore, .git/info/exclude or a global exclude reaches the tree.
+  files is the list the search-built part was built from.
+  """
+  uploadWithSupport(globs: [String!]!, supportGlobs: [String!]!): Upload! {
+    let base = upload(globs)
+    if (supportGlobs.isEmpty) {
+      base
+    } else {
+      Upload(files: base.files, tree: base.tree.withDirectory("/", workspace.directory("/", include: supportGlobs, exclude: skipExcludes, gitignore: true)))
+    }
+  }
+
+  """
+  Exhaustive listing, sorted: the files ripgrep sees. Only scanFiles and
+  goLintModules evaluate it.
+  """
+  listing: [String!]! {
+    sortStrings(listed)
+  }
 }

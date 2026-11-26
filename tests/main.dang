@@ -6,12 +6,50 @@ failure must contain; a leading ! marks a fragment it must not contain).
 """
 type WeedsTests {
   let fixtures: Directory!
+  let hostWorkspace: Workspace!
   let generatorSource: File!
 
   new(ws: Workspace!) {
     self.fixtures = ws.directory("/tests/fixtures")
+    self.hostWorkspace = ws
     self.generatorSource = ws.file("/skills.dang")
     self
+  }
+
+  """
+  Workspace.search and Workspace.directory on workspaces built from
+  directories, which the shared file layer is built on: without a .git entry
+  ripgrep honours .ignore and .rgignore but not .gitignore; with one it honours
+  all three, nested files included, and .git/info/exclude either way; the
+  directory upload's gitignore option reads .gitignore only; a positive search
+  glob re-includes ignored files while a negated one does not; a files-only
+  search never lists an empty file or a file with NUL bytes; a multiline search
+  for the start of the text yields one result with one submatch per non-empty
+  text file.
+  """
+  pub ignoreProbes: Void @check {
+    let plain = needleTree(directory).asWorkspace
+    let headed = needleTree(directory.withNewFile(".git/HEAD", gitHead)).asWorkspace
+    expect(searchedPaths(plain, true, []) == ".hidden.txt git-ignored.txt other/nested-git.txt plain.txt sub/git-ignored.txt sub/nested-git.txt sub/plain.txt", "without .git, search must honour .ignore and .rgignore but not .gitignore, got: " + searchedPaths(plain, true, []))
+    expect(searchedPaths(headed, true, []) == ".hidden.txt other/nested-git.txt plain.txt sub/plain.txt", "with a .git entry, search must honour .gitignore, .ignore and .rgignore, nested ones included, got: " + searchedPaths(headed, true, []))
+    expect(searchedPaths(headed, false, []).contains("git-ignored.txt") and searchedPaths(headed, false, []).contains("sub/nested-rg.txt"), "without skipIgnored, search must return ignored files")
+
+    let uploaded = uploadedPaths(plain.directory("/", gitignore: true))
+    expect(uploaded == ".gitignore .hidden.txt .ignore .rgignore dot-ignored.txt other/nested-git.txt plain.txt rg-ignored.txt sub/.gitignore sub/.ignore sub/.rgignore sub/nested-dot.txt sub/nested-rg.txt sub/plain.txt", "the upload's gitignore option must apply .gitignore files only, got: " + uploaded)
+
+    let excluded = excludeTree(directory.withNewFile(".git/HEAD", gitHead))
+    expect(searchedPaths(excluded.asWorkspace, true, []) == "control.txt", "search must honour .git/info/exclude, got: " + searchedPaths(excluded.asWorkspace, true, []))
+    expect(searchedPaths(excludeTree(directory).asWorkspace, true, []) == "control.txt", "search must honour .git/info/exclude without a HEAD file, got: " + searchedPaths(excludeTree(directory).asWorkspace, true, []))
+    let excludedUpload = uploadedPaths(excluded.asWorkspace.directory("/", gitignore: true))
+    expect(excludedUpload.contains("excluded.txt") and excludedUpload.contains("sub/excluded-sub.txt"), "the upload's gitignore option must not apply .git/info/exclude, got: " + excludedUpload)
+
+    let included = searchedPaths(headed, true, ["*.txt"])
+    expect(included.contains("git-ignored.txt") and included.contains("sub/nested-rg.txt"), "a positive search glob must re-include ignored files, got: " + included)
+    expect(searchedPaths(headed, true, ["!sub/**"]) == ".hidden.txt other/nested-git.txt plain.txt", "a negated search glob must keep ignore rules, got: " + searchedPaths(headed, true, ["!sub/**"]))
+
+    expect(filesOnlyPaths(kindsTree().asWorkspace) == "newline.txt nonl.txt text.txt", "a files-only search must skip empty files and files with NUL bytes, got: " + filesOnlyPaths(kindsTree().asWorkspace))
+    sameList("the one-result-per-file search", ["newline.txt:1:1", "nonl.txt:1:1", "text.txt:1:1"], oneResultPerFile(kindsTree().asWorkspace))
+    null
   }
 
   """
@@ -72,6 +110,20 @@ type WeedsTests {
     expect(shared.sortedFindings(expected) == expected, "sorted findings must stay as they are")
     let rejected = { shared.sortedFindings("not a finding"); "accepted" } rescue { err: Error => err.message }
     expect(rejected.contains("not a finding line"), "a malformed line must be rejected, got: " + rejected)
+
+    let inOrder = ["a", "a-b", "a/b", "b"].map { path =>
+      [1, 2, 9, 10, 100].map { line =>
+        ["alpha", "alpha2", "beta"].map { rule =>
+          ["m", "m2"].map { message =>
+            let row = path + ":" + toString(line) + ": " + rule + ": " + message
+            if (line == 9) { row + "\n" + row } else { row }
+          }.join("\n")
+        }.join("\n")
+      }.join("\n")
+    }.join("\n").split("\n")
+    let shuffled = scaleRange(inOrder.length).map { slot, i => inOrder[(i * 37 + 11) % inOrder.length]! }
+    expect(shuffled.join("\n") != inOrder.join("\n"), "the shuffle must change the order")
+    sameText("the findings sorted from a shuffled input", inOrder.join("\n"), shared.sortedFindings(shuffled.join("\n")))
     null
   }
 
@@ -92,9 +144,9 @@ type WeedsTests {
   }
 
   """
-  The shared scanning walk skips .git, vendor, node_modules and Weeds-owned
-  skill folders, yields hidden and gitignored files, and leaves the module's
-  workspace whole.
+  The scanning listing skips .git, vendor, node_modules and Weeds-owned skill
+  folders, lists hidden files and leaves out files an ignore file matches, and
+  the module's workspace stays whole.
   """
   pub walk: Void @check {
     let marker = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).ownerMarker
@@ -116,15 +168,149 @@ type WeedsTests {
       .withNewFile("src/main.go", "package main\n")
     let w = weeds(ws: tree.asWorkspace)
     let walked = w.scanFiles.join("\n")
-    let expected = ".agents/skills/unmarked/SKILL.md\n.claude/skills/imposter/.weeds-managed\n.claude/skills/imposter/SKILL.md\n.gitignore\n.hidden/file.txt\nignored.log\nsrc/main.go"
-    expect(walked == expected, "the walk must skip .git, vendor, node_modules and owned skill folders only; got:\n" + walked)
+    let expected = ".agents/skills/unmarked/SKILL.md\n.claude/skills/imposter/.weeds-managed\n.claude/skills/imposter/SKILL.md\n.gitignore\n.hidden/file.txt\nsrc/main.go"
+    expect(walked == expected, "the walk must skip .git, vendor, node_modules, owned skill folders and ignored files; got:\n" + walked)
     expect(w.scanFiles.join("\n") == walked, "walking twice must give identical output")
     expect(w.ownedFolders == [".agents/skills/owned"], "only a folder with a valid marker is owned, got: " + w.ownedFolders.join(", "))
     expect(w.source.file(".agents/skills/owned/.weeds-managed").contents == marker, "the workspace must keep the owned marker")
     expect(w.source.file(".agents/skills/owned/SKILL.md").contents == "skill\n", "the workspace must keep owned skill files")
     expect(w.source.file(".agents/skills/owned/refs/deep.md").contents == "deep\n", "the workspace must keep owned nested files")
+    expect(w.source.file("ignored.log").contents == "ignored\n", "the workspace must keep ignored files")
     expect(w.source.exists(".git/config") and w.source.exists("vendor/pkg/a.go") and w.source.exists("node_modules/m/index.js"), "the workspace must keep .git, vendor and node_modules")
     null
+  }
+
+  """
+  A file matched by .gitignore, .ignore, .rgignore, a nested ignore file or
+  .git/info/exclude is left out of the listing, of search results and of an
+  upload, which all hold the same files. Hidden files that are not ignored,
+  and the ignore files themselves, stay. The skipped names and an owned skill
+  folder stay out too.
+  """
+  pub scanIgnored: Void @check {
+    let w = ignoreSubject
+    let listed = [".gitignore", ".hidden/kept.txt", ".ignore", ".rgignore", "kept.go", "kept.txt", "other/nested-git.txt", "sub/.gitignore", "sub/.ignore", "sub/.rgignore", "sub/kept.txt"]
+    expect(listed.length > 0 and w.scanFiles.length == listed.length, "the scan of a fixture with known files must not be empty")
+    sameList("scanFiles", listed, w.scanFiles)
+    sameList("the files of a search for any character", listed, sortRows(w.searchRows(".", []).map { row => row.split(":")[0]! }.uniq))
+    sameList("the files in the upload", listed, w.uploadedFiles([]))
+    sameList("the files the upload was built from", listed, w.uploadList([]))
+    expect(w.ownedFolders == [".agents/skills/owned"], "the owned skill folder must be found from its marker, got: " + w.ownedFolders.join(", "))
+    null
+  }
+
+  """
+  The search helper returns only lines in files that match its include globs,
+  and the upload helper only files that match them, each with ignore files
+  applied. A glob-restricted search or upload does not evaluate scanFiles.
+  """
+  pub fileLayer: Void @check {
+    let w = ignoreSubject
+    sameList("a search for needle", [".hidden/kept.txt:1", "kept.txt:1", "other/nested-git.txt:1", "sub/kept.txt:1"], sortRows(w.searchRows("needle", [])))
+    sameList("a search under sub", ["sub/kept.txt:1"], sortRows(w.searchRows("needle", ["sub/**"])))
+    sameList("a search of root text files", ["kept.txt:1"], sortRows(w.searchRows("needle", ["*.txt"])))
+    sameList("a search of Go files", ["kept.go:3"], sortRows(w.searchRows("Needle", ["**/*.go"])))
+    sameList("a search of two globs", ["kept.go:3", "sub/kept.txt:1"], sortRows(w.searchRows("(?i)needle", ["**/*.go", "sub/**"])))
+    sameList("a search of an ignored file's name", [], w.searchRows("Needle", ["rg-ignored.go", "git-ignored.txt", "build/**"]))
+    sameList("the Go upload", ["kept.go"], w.uploadedFiles(["**/*.go"]))
+    sameList("the Go upload's list", ["kept.go"], w.uploadList(["**/*.go"]))
+    sameList("the text upload", [".hidden/kept.txt", "kept.txt", "other/nested-git.txt", "sub/kept.txt"], w.uploadedFiles(["**/*.txt"]))
+    sameList("the hidden upload", [".hidden/kept.txt"], w.uploadedFiles([".hidden/**"]))
+    sameList("an upload no file matches", [], w.uploadedFiles(["**/*.rs"]))
+    expect(w.hostHasRipgrep, "the engine-side search of a fixture workspace must be backed by ripgrep")
+    expect(w.ripgrepGuard([1, 3, 1]) == "ok", "results with submatches must pass the ripgrep guard")
+    expect(w.ripgrepGuard([]) == "ok", "no results must pass the ripgrep guard")
+    let bare = w.ripgrepGuard([1, 0])
+    expect(bare.contains("ripgrep") and bare.contains("ignore"), "results without submatches must fail naming ripgrep, got: " + bare)
+
+    let odd = directory
+      .withNewFile(".git/HEAD", gitHead)
+      .withNewFile(".gitignore", "a1.txt\nweird.txt\nqx.txt\nd1.txt\n")
+      .withNewFile("a[1].txt", "x\n").withNewFile("a1.txt", "x\n")
+      .withNewFile("we*ird.txt", "x\n").withNewFile("weird.txt", "x\n")
+      .withNewFile("q?.txt", "x\n").withNewFile("qx.txt", "x\n")
+      .withNewFile("d{1}.txt", "x\n").withNewFile("d1.txt", "x\n")
+      .withNewFile("!bang.txt", "x\n")
+      .withNewFile("sp ace.txt", "x\n")
+      .withNewFile("back\\slash.txt", "x\n")
+      .withNewFile("sub/#hash.txt", "x\n")
+    let oddFiles = ["!bang.txt", ".gitignore", "a[1].txt", "back\\slash.txt", "d{1}.txt", "q?.txt", "sp ace.txt", "sub/#hash.txt", "we*ird.txt"]
+    sameList("the listing of odd names", oddFiles, weeds(ws: odd.asWorkspace).scanFiles)
+    sameList("the upload of odd names, which must not match ignored look-alikes", oddFiles, weeds(ws: odd.asWorkspace).uploadedFiles([]))
+    null
+  }
+
+  """
+  The listing helper includes the empty files that the search never lists, but
+  not one an ignore file or .git/info/exclude hides, nor a text file hidden
+  that way: markdown candidates from every repository ignore source. The
+  upload helper's support files bring in files the search never lists (empty
+  or binary) from a direct upload with .gitignore applied.
+  """
+  pub listedWithEmpty: Void @check {
+    let w = weeds(ws: markdownWorkspace.asWorkspace)
+    sameList("the markdown listing", [".hidden/empty.md", "empty.md", "kept.md", "sub/empty.md"], w.listedFiles(["**/*.md"]))
+    sameList("the listing under sub", ["sub/.gitignore", "sub/.ignore", "sub/.rgignore", "sub/empty.md", "sub/kept.txt"], w.listedFiles(["sub/**"]))
+    sameList("the markdown listing under sub", ["sub/empty.md"], w.listedFiles(["sub/*.md"]))
+    sameList("a listing no file matches", [], w.listedFiles(["**/*.rs"]))
+    sameList("the upload without support", ["kept.go"], w.uploadedFiles(["**/*.go"]))
+    sameList("the upload with support files", ["data/blob.bin", "data/empty.dat", "kept.go"], w.supportUploadedFiles(["**/*.go"], ["data/**"]))
+    sameList("the support upload leaves out gitignored files", ["kept.go"], w.supportUploadedFiles(["**/*.go"], ["build/**"]))
+    null
+  }
+
+  let markdownWorkspace: Directory! {
+    ignoreWorkspace
+      .withNewFile("kept.md", "text\n")
+      .withNewFile("empty.md", "")
+      .withNewFile("sub/empty.md", "")
+      .withNewFile(".hidden/empty.md", "")
+      .withNewFile("dot-ignored.md", "")
+      .withNewFile("git-ignored.md", "")
+      .withNewFile("rg-ignored.md", "")
+      .withNewFile("info-excluded.md", "")
+      .withNewFile("sub/nested-dot.md", "")
+      .withNewFile("sub/nested-git.md", "")
+      .withNewFile("sub/nested-rg.md", "")
+      .withNewFile("build/empty.md", "")
+      .withNewFile("vendor/empty.md", "")
+      .withNewFile("node_modules/empty.md", "")
+      .withNewFile("data/empty.dat", "")
+      .withNewFile("data/blob.bin", "\u0000\u0001")
+  }
+
+  let ignoreSubject: Weeds! {
+    weeds(ws: ignoreWorkspace.asWorkspace)
+  }
+
+  let ignoreWorkspace: Directory! {
+    let marker = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace).ownerMarker
+    materialize(fixtures.directory("ignore-probe"))
+      .withNewFile(".git/config", "git\n")
+      .withNewFile(".agents/skills/owned/SKILL.md", "needle\n")
+      .withNewFile(".agents/skills/owned/.weeds-managed", marker)
+  }
+
+  """
+  What a workspace on this machine's disk gives: the files of an upload and
+  the files of a search, with ignore rules applied, for the manual
+  global-excludes evidence kept under tests/fixtures/ignore-probe. Run it from a
+  scratch workspace.
+  """
+  pub rawHost(pattern: String!, glob: String!): String! {
+    let globs = if (glob == "") { [] :: [String!]! } else { [glob] }
+    hostWorkspace.search(pattern: pattern, skipIgnored: true, globs: globs).{{filePath, submatches.{{start}}}}.map { r => r.filePath + "[" + toString(r.submatches.length) + "]" }.join(" ")
+  }
+
+  """
+  The same workspace through the search helper, the shared upload helper and a
+  plain Workspace.directory upload with its gitignore option, for the manual
+  global-excludes evidence. Run it from a scratch workspace.
+  """
+  pub hostIgnoreReport(pattern: String!): String! {
+    let w = weeds(ws: hostWorkspace)
+    let plain = sortRows(hostWorkspace.directory("/", include: ["**/*.dat"], gitignore: true).glob("**/*").map { path => path.trimPrefix("./") }.filter { path => !path.hasSuffix("/") })
+    "search: " + w.searchRows(pattern, []).join(" ") + "\nshared upload: " + w.uploadedFiles(["**/*.dat"]).join(" ") + "\nplain upload with gitignore: " + plain.join(" ")
   }
 
   """
@@ -320,7 +506,8 @@ type WeedsTests {
 
   """
   go-lint runs once per go.mod outside vendor, testdata and node_modules,
-  skipping a module that holds no Go files.
+  skipping a module that holds no Go files and one that lives only in a
+  directory an ignore file, .git/info/exclude or .gitignore leaves out.
   """
   pub golintModules: Void @check {
     let tree = directory
@@ -343,8 +530,20 @@ type WeedsTests {
       .withNewFile("outer/go.mod", "module outer\n")
       .withNewFile("outer/inner/go.mod", "module inner\n")
       .withNewFile("outer/inner/i.go", "package inner\n")
-    let modules = weeds(ws: tree.asWorkspace).goLintModules.join(",")
-    expect(modules == ".,a,a/b,outer/inner", "go-lint must lint each module that holds Go files, once; got: " + modules)
+      .withNewFile(".gitignore", "worktrees/\n")
+      .withNewFile(".rgignore", "scratch/\n")
+      .withNewFile("worktrees/copy/go.mod", "module copy\n")
+      .withNewFile("worktrees/copy/c.go", "package copy\n")
+      .withNewFile("scratch/go.mod", "module scratch\n")
+      .withNewFile("scratch/s.go", "package scratch\n")
+      .withNewFile("a/.ignore", "hidden/\n")
+      .withNewFile("a/hidden/go.mod", "module hidden\n")
+      .withNewFile("a/hidden/h.go", "package hidden\n")
+      .withNewFile(".git/info/exclude", "private/\n")
+      .withNewFile("private/go.mod", "module private\n")
+      .withNewFile("private/p.go", "package private\n")
+    let modules = weeds(ws: gitMarked(tree).asWorkspace).goLintModules.join(",")
+    expect(modules == ".,a,a/b,outer/inner", "go-lint must lint each module that holds Go files, once, and none that only an ignored directory holds; got: " + modules)
     null
   }
 
@@ -661,12 +860,7 @@ type WeedsTests {
   }
 
   let materialize(caseDir: Directory!): Directory! {
-    let base = caseDir.directory("workspace")
-    let named = if (base.exists("gitignore.fixture")) {
-      base.withFile(".gitignore", base.file("gitignore.fixture")).withoutFile("gitignore.fixture")
-    } else {
-      base
-    }
+    let named = ignoreAware(caseDir.directory("workspace"))
     if (caseDir.exists("symlinks.txt")) {
       fragmentLines(caseDir.file("symlinks.txt").contents).reduce(named) { dir, row =>
         let parts = row.split(" -> ")

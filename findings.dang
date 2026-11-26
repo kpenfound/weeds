@@ -7,42 +7,30 @@ type Finding {
   text: String! {
     path + ":" + toString(line) + ": " + rule + ": " + message
   }
-
-  before(other: Finding!): Boolean! {
-    if (path != other.path) {
-      path < other.path
-    } else if (line != other.line) {
-      line < other.line
-    } else if (rule != other.rule) {
-      rule < other.rule
-    } else {
-      message < other.message
-    }
-  }
 }
 
-let mergeFindings(left: [Finding!]!, right: [Finding!]!): [Finding!]! {
-  let i = 0
-  let j = 0
-  (left + right).map { slot =>
-    if (j >= right.length or (i < left.length and !right[j]!.before(left[i]!))) {
-      let next = left[i]!
-      i += 1
-      next
-    } else {
-      let next = right[j]!
-      j += 1
-      next
-    }
-  }
+# One string per finding whose byte order is the finding order: path, line,
+# rule, message, then the position in the input. The line and the position are
+# offset to a fixed width so that digits compare as numbers, and \x01 sorts
+# before every character a path, rule or message holds.
+let lineOffset = 20000000000
+
+let positionOffset = 100000000000
+
+let findingKey(f: Finding!, position: Int!): String! {
+  f.path + "\x01" + toString(lineOffset + f.line) + "\x01" + f.rule + "\x01" + f.message + "\x01" + toString(positionOffset + position)
+}
+
+let keyPosition(key: String!): Int! {
+  let parts = key.split("\x01")
+  parseInt(parts[parts.length - 1]!) - positionOffset
 }
 
 let sortFindings(findings: [Finding!]!): [Finding!]! {
   if (findings.length <= 1) {
     findings
   } else {
-    let middle = findings.length / 2
-    mergeFindings(sortFindings(findings.takeFirst(middle)), sortFindings(findings.dropFirst(middle)))
+    sortStrings(findings.map { f, position => findingKey(f, position) }).map { key => findings[keyPosition(key)]! }
   }
 }
 

@@ -14,6 +14,14 @@ code leaving the machine. It also installs the matching agent skills from
 
 ## Install
 
+Weeds needs [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) on the
+`PATH` of the machine that runs `dagger`, a laptop or a CI runner. The scanning
+checks find files with `Workspace.search`, which runs ripgrep on that machine
+and applies `.gitignore`, `.ignore`, `.rgignore`, `.git/info/exclude` and the
+machine's global git excludes. Without ripgrep Dagger falls back to `grep`,
+which honours none of them, so Weeds stops with an error that names ripgrep
+instead of scanning ignored files.
+
 1. Run `dagger install github.com/kpenfound/weeds`
 2. Give the repository somewhere to install skills: an `AGENTS.md` (skills go
    to `.agents/skills`), a `CLAUDE.md` (`.claude/skills`), or an existing
