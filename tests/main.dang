@@ -550,6 +550,50 @@ type WeedsTests {
   }
 
   """
+  The tree go-lint uploads holds the Go sources and module files that the file
+  layer lists and the other files of the modules, and none of the files an
+  ignore file, .git/info/exclude, vendor or node_modules leaves out: not an
+  ignored copy of a module, its go.mod or its Go files.
+  """
+  pub golintUpload: Void @check {
+    let tree = directory
+      .withNewFile("go.mod", "module root\n")
+      .withNewFile("go.sum", "x\n")
+      .withNewFile("main.go", "package main\n")
+      .withNewFile("data/blob.bin", "\x01\x02")
+      .withNewFile("data/empty.dat", "")
+      .withNewFile("docs/readme.txt", "notes\n")
+      .withNewFile(".gitignore", "worktrees/\n")
+      .withNewFile(".rgignore", "scratch/\n")
+      .withNewFile("lib/.ignore", "dot/\n")
+      .withNewFile(".git/info/exclude", "private/\n")
+      .withNewFile("lib/lib.go", "package lib\n")
+      .withNewFile("worktrees/copy/go.mod", "module root\n")
+      .withNewFile("worktrees/copy/go.sum", "x\n")
+      .withNewFile("worktrees/copy/main.go", "package main\n")
+      .withNewFile("scratch/go.mod", "module scratch\n")
+      .withNewFile("scratch/s.go", "package scratch\n")
+      .withNewFile("lib/dot/go.mod", "module dot\n")
+      .withNewFile("lib/dot/d.go", "package dot\n")
+      .withNewFile("private/go.mod", "module private\n")
+      .withNewFile("private/p.go", "package private\n")
+      .withNewFile("vendor/v/go.mod", "module v\n")
+      .withNewFile("vendor/v/v.go", "package v\n")
+      .withNewFile("node_modules/n/n.go", "package n\n")
+    let subject = weeds(ws: gitMarked(tree).asWorkspace)
+    sameList("the go-lint modules", ["."], subject.goLintModules)
+    sameList("the go-lint upload", [".gitignore", ".rgignore", "data/blob.bin", "data/empty.dat", "docs/readme.txt", "go.mod", "go.sum", "lib/.ignore", "lib/lib.go", "main.go"], subject.goLintUploadedFiles)
+
+    let nested = directory
+      .withNewFile("svc/go.mod", "module svc\n")
+      .withNewFile("svc/s.go", "package svc\n")
+      .withNewFile("svc/data/blob.bin", "\x01\x02")
+      .withNewFile("other/o.txt", "not part of a module\n")
+    sameList("the go-lint upload without a root module", ["svc/data/blob.bin", "svc/go.mod", "svc/s.go"], weeds(ws: gitMarked(nested).asWorkspace).goLintUploadedFiles)
+    null
+  }
+
+  """
   The installer's golden changesets over fixture workspaces and fixture skill
   trees: targets, ownership, replacement, removal and source validation.
   """

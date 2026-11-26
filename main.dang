@@ -225,7 +225,16 @@ type Weeds {
   left out. "." is the workspace root.
   """
   pub goLintModules: [String!]! {
-    goModules(files.listing)
+    goModules(files.listed)
+  }
+
+  """
+  The files the go-lint container holds, sorted, for weeds-tests: the Go
+  sources, go.mod, go.sum and go.work files the file layer lists, plus the
+  other files of the Go modules from a direct upload with .gitignore applied.
+  """
+  pub goLintUploadedFiles: [String!]! {
+    sortStrings(goLintTree.glob("**/*").map { path => path.trimPrefix("./") }.filter { path => !path.hasSuffix("/") })
   }
 
   """
@@ -253,7 +262,7 @@ type Weeds {
   output.
   """
   pub goLintReportFromResult(module: String!, status: Int!, stdout: String!, stderr: String!): String! {
-    reportOf(goLintOutcomeOf(goLintProcessFindings(scanTree, module, status, stdout, stderr), settings))
+    reportOf(goLintOutcomeOf(goLintProcessFindings(goLintBase(goLintTree), module, status, stdout, stderr), settings))
   }
 
   let suppressionsOutcome: [Finding!]! {
@@ -261,7 +270,11 @@ type Weeds {
   }
 
   let goLintOutcome: [Finding!]! {
-    goLintFindings(scanTree, scanFiles, settings)
+    goLintFindings(files, settings)
+  }
+
+  let goLintTree: Directory! {
+    goLintUpload(files, goModules(files.listed)).tree
   }
 
   let markdownOutcome: [Finding!]! {

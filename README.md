@@ -100,9 +100,20 @@ failure or output Weeds cannot read raises an error instead of passing. The Go
 module and build caches are kept between runs, and go.mod's `go` directive must
 not need a newer toolchain than the image carries.
 
+Modules come from the files the workspace search sees, so a copy of a module in
+an ignored directory (an agent worktree, say) is neither a module nor linted.
+golangci-lint gets the Go sources, `go.mod`, `go.sum` and `go.work` files from
+that same search, so an ignored one never reaches it. Its other build inputs,
+such as embedded assets and cgo sources, come from the modules' directories with
+`.gitignore` applied. golangci-lint reports only on Go files, so a build input
+hidden only by another ignore source cannot produce a finding. Its JSON output
+is decoded with Dang's built-in decoder.
+
 A complexity finding ends with `(baseline symbol "Name")`, where `Name` is the
 nearest preceding top-level declaration (`Recv.Method` for a method), so the
-baseline entry can be copied from the finding.
+baseline entry can be copied from the finding. One `grep` in the golangci-lint
+container reads the declaration lines of the files with complexity findings;
+no file is read one at a time.
 
 ### Scanning
 

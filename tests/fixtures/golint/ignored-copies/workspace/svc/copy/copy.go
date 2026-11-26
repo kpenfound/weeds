@@ -1,0 +1,3 @@
+package svccopy
+
+func leftover() {}

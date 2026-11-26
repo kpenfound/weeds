@@ -335,14 +335,16 @@ type FileAccess {
   .gitignore applied. Support files need no search listing (an empty or binary
   file ripgrep never lists is held), at the cost that one hidden only by
   .ignore, .rgignore, .git/info/exclude or a global exclude reaches the tree.
-  files is the list the search-built part was built from.
+  files is the list the search-built part was built from. supportExclude
+  names files the direct upload must never carry, because they come from the
+  search-built part only.
   """
-  uploadWithSupport(globs: [String!]!, supportGlobs: [String!]!): Upload! {
+  uploadWithSupport(globs: [String!]!, supportGlobs: [String!]!, supportExclude: [String!]! = []): Upload! {
     let base = upload(globs)
     if (supportGlobs.isEmpty) {
       base
     } else {
-      Upload(files: base.files, tree: base.tree.withDirectory("/", workspace.directory("/", include: supportGlobs, exclude: skipExcludes, gitignore: true)))
+      Upload(files: base.files, tree: base.tree.withDirectory("/", workspace.directory("/", include: supportGlobs, exclude: skipExcludes + supportExclude, gitignore: true)))
     }
   }
 
