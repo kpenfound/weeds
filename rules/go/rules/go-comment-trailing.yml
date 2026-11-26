@@ -1,0 +1,11 @@
+id: go-comment-trailing
+language: Go
+severity: hint
+message: trailing comment
+rule:
+  all:
+    - matches: go-plain-comment
+    - follows:
+        stopBy: neighbor
+        not:
+          matches: go-newline

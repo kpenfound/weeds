@@ -15,6 +15,30 @@ valid:
 
     // TODOS is not the marker
     func run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // todo in lower case is an ordinary word
+    //weeds-nl
+    func run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // TODOS is not the marker
+    //weeds-nl
+    func run() {}
 invalid:
   - |
     package p
@@ -44,4 +68,52 @@ invalid:
     package p
 
     //go:generate stringer -type=T TODO
+    type T int
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // TODO: handle the error
+    //weeds-nl
+    func run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // FIXME this is wrong
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    /*
+    //weeds-nl
+    Run starts the work.
+    //weeds-nl
+    FIXME: slow
+    //weeds-nl
+    */
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func run() {
+    //weeds-nl
+    	// TODO: later
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    //go:generate stringer -type=T TODO
+    //weeds-nl
     type T int

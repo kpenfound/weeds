@@ -1,0 +1,19 @@
+id: go-comment-blank-line
+language: Go
+severity: hint
+message: doc comment is separated from its declaration by a blank line
+rule:
+  all:
+    - matches: go-plain-comment
+    - not:
+        matches: go-in-function
+    - precedes:
+        stopBy:
+          not:
+            kind: comment
+        matches: go-doc-target
+    - precedes:
+        stopBy:
+          not:
+            kind: comment
+        matches: go-blank-line

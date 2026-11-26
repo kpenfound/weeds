@@ -27,6 +27,48 @@ valid:
     /// <reference path="x.d.ts" />
     //# sourceMappingURL=a.js.map
     export const a = 1;
+  - |
+    /** Starts the work. */
+    //weeds-nl
+    export function run() {}
+  - |
+    // return the value to the caller
+    //weeds-nl
+    // for each item we build a list
+    //weeds-nl
+    // if there is no match we stop
+    //weeds-nl
+    export function run() {}
+  - |
+    /**
+    //weeds-nl
+     * Example:
+    //weeds-nl
+     *   const x = run();
+    //weeds-nl
+     */
+    //weeds-nl
+    export function run() {}
+  - |
+    export function run() {
+    //weeds-nl
+      // const x = 1;
+    //weeds-nl
+      // return x;
+    //weeds-nl
+    }
+  - |
+    // Compare a == b before use
+    //weeds-nl
+    // ratio = a measure of how full the buffer is
+    //weeds-nl
+    export function run() {}
+  - |
+    /// <reference path="x.d.ts" />
+    //weeds-nl
+    //# sourceMappingURL=a.js.map
+    //weeds-nl
+    export const a = 1;
 invalid:
   - |
     // const x = compute();
@@ -72,4 +114,64 @@ invalid:
     export const a = 1;
   - |
     // const { a, b } = props;
+    export const a = 1;
+  - |
+    // const x = compute();
+    //weeds-nl
+    export const a = 1;
+  - |
+    // let x = 1
+    //weeds-nl
+    export const a = 1;
+  - |
+    // function old() {
+    //weeds-nl
+    export const a = 1;
+  - |
+    // if (ready) {
+    //weeds-nl
+    export const a = 1;
+  - |
+    // import { a } from "./a";
+    //weeds-nl
+    export const a = 1;
+  - |
+    // export const b = 2;
+    //weeds-nl
+    export const a = 1;
+  - |
+    // x = 2;
+    //weeds-nl
+    export const a = 1;
+  - |
+    // console.log("debug");
+    //weeds-nl
+    export const a = 1;
+  - |
+    // await run();
+    //weeds-nl
+    export const a = 1;
+  - |
+    // return x;
+    //weeds-nl
+    export const a = 1;
+  - |
+    // throw new Error("x");
+    //weeds-nl
+    export const a = 1;
+  - |
+    // }
+    //weeds-nl
+    export const a = 1;
+  - |
+    // type T = { a: number };
+    //weeds-nl
+    export const a = 1;
+  - |
+    // class Old {
+    //weeds-nl
+    export const a = 1;
+  - |
+    // const { a, b } = props;
+    //weeds-nl
     export const a = 1;

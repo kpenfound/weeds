@@ -1,0 +1,25 @@
+id: go-licence-header
+language: Go
+severity: hint
+message: licence header
+rule:
+  all:
+    - matches: go-leading
+    - not:
+        matches: go-newline
+    - any:
+        - matches: go-licence-line
+        - follows:
+            stopBy:
+              any:
+                - matches: go-blank-line
+                - not:
+                    kind: comment
+            matches: go-licence-line
+        - precedes:
+            stopBy:
+              any:
+                - matches: go-blank-line
+                - not:
+                    kind: comment
+            matches: go-licence-line

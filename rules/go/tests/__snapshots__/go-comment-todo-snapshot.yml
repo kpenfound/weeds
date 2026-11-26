@@ -53,3 +53,74 @@ snapshots:
       style: primary
       start: 25
       end: 39
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    /*
+    //weeds-nl
+    Run starts the work.
+    //weeds-nl
+    FIXME: slow
+    //weeds-nl
+    */
+    //weeds-nl
+    func Run() {}
+  : labels:
+    - source: |-
+        /*
+        //weeds-nl
+        Run starts the work.
+        //weeds-nl
+        FIXME: slow
+        //weeds-nl
+        */
+      style: primary
+      start: 33
+      end: 104
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // FIXME this is wrong
+    //weeds-nl
+    func Run() {}
+  : labels:
+    - source: // FIXME this is wrong
+      style: primary
+      start: 33
+      end: 55
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // TODO: handle the error
+    //weeds-nl
+    func run() {}
+  : labels:
+    - source: '// TODO: handle the error'
+      style: primary
+      start: 33
+      end: 58
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    //go:generate stringer -type=T TODO
+    //weeds-nl
+    type T int
+  : labels:
+    - source: //go:generate stringer -type=T TODO
+      style: primary
+      start: 33
+      end: 68
+  ? "package p\n//weeds-nl\n\n//weeds-nl\nfunc run() {\n//weeds-nl\n\t// TODO: later\n//weeds-nl\n}\n"
+  : labels:
+    - source: '// TODO: later'
+      style: primary
+      start: 58
+      end: 72

@@ -4,9 +4,7 @@ severity: hint
 message: comment in package main
 rule:
   all:
-    - kind: comment
-    - not:
-        matches: go-directive
+    - matches: go-plain-comment
     - inside:
         kind: source_file
         stopBy: end

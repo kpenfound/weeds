@@ -4,11 +4,10 @@ severity: hint
 message: comment is not a doc comment on an exported identifier
 rule:
   all:
-    - kind: comment
-    - not:
-        matches: ts-directive
+    - matches: ts-plain-comment
     - any:
         - matches: ts-in-function
+        - regex: '^.*ast_grep_ignore'
         - not:
             matches: ts-jsdoc
         - not:

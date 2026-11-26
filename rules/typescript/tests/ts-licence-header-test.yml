@@ -1,0 +1,85 @@
+id: ts-licence-header
+valid:
+  - |
+    // Notes about the licence of this file.
+    //weeds-nl
+    // More notes.
+    //weeds-nl
+
+    //weeds-nl
+    export const a = 1;
+  - |
+    export const a = 1;
+    //weeds-nl
+
+    //weeds-nl
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    export const b = 2;
+  - |
+    /** Run starts the work. */
+    //weeds-nl
+    export function run(): void {}
+  - |
+    export function run(): void {
+    //weeds-nl
+      // Copyright 2024 Example Corp.
+    //weeds-nl
+    }
+  - |
+    export const a = 1;
+invalid:
+  - |
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    // Licensed under MIT.
+    //weeds-nl
+
+    //weeds-nl
+    export const a = 1;
+  - |
+    // Header line.
+    //weeds-nl
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    // More lines.
+    //weeds-nl
+
+    //weeds-nl
+    export const a = 1;
+  - |
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+
+    //weeds-nl
+    /** Run starts the work. */
+    //weeds-nl
+    export function run(): void {}
+  - |
+    /*
+    //weeds-nl
+     * Copyright 2024 Example Corp.
+    //weeds-nl
+     */
+    //weeds-nl
+
+    //weeds-nl
+    export const a = 1;
+  - |
+    /*!
+    //weeds-nl
+     * Licensed under the MIT licence.
+    //weeds-nl
+     */
+    //weeds-nl
+    export const a = 1;
+  - |
+    #!/usr/bin/env node
+    //weeds-nl
+    // SPDX-License-Identifier: MIT
+    //weeds-nl
+    export const a = 1;
+  - |
+    /** @license MIT */
+    //weeds-nl
+    export const a = 1;

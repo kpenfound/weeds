@@ -1,0 +1,105 @@
+id: ts-licence-header
+snapshots:
+  ? |
+    #!/usr/bin/env node
+    //weeds-nl
+    // SPDX-License-Identifier: MIT
+    //weeds-nl
+    export const a = 1;
+  : labels:
+    - source: '// SPDX-License-Identifier: MIT'
+      style: primary
+      start: 31
+      end: 62
+  ? |
+    /*
+    //weeds-nl
+     * Copyright 2024 Example Corp.
+    //weeds-nl
+     */
+    //weeds-nl
+
+    //weeds-nl
+    export const a = 1;
+  : labels:
+    - source: |-
+        /*
+        //weeds-nl
+         * Copyright 2024 Example Corp.
+        //weeds-nl
+         */
+      style: primary
+      start: 0
+      end: 60
+  ? |
+    /*!
+    //weeds-nl
+     * Licensed under the MIT licence.
+    //weeds-nl
+     */
+    //weeds-nl
+    export const a = 1;
+  : labels:
+    - source: |-
+        /*!
+        //weeds-nl
+         * Licensed under the MIT licence.
+        //weeds-nl
+         */
+      style: primary
+      start: 0
+      end: 64
+  ? |
+    /** @license MIT */
+    //weeds-nl
+    export const a = 1;
+  : labels:
+    - source: /** @license MIT */
+      style: primary
+      start: 0
+      end: 19
+  ? |
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+
+    //weeds-nl
+    /** Run starts the work. */
+    //weeds-nl
+    export function run(): void {}
+  : labels:
+    - source: // Copyright 2024 Example Corp.
+      style: primary
+      start: 0
+      end: 31
+  ? |
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    // Licensed under MIT.
+    //weeds-nl
+
+    //weeds-nl
+    export const a = 1;
+  : labels:
+    - source: // Copyright 2024 Example Corp.
+      style: primary
+      start: 0
+      end: 31
+  ? |
+    // Header line.
+    //weeds-nl
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    // More lines.
+    //weeds-nl
+
+    //weeds-nl
+    export const a = 1;
+  : labels:
+    - source: // Header line.
+      style: primary
+      start: 0
+      end: 15
+    - source: // Copyright 2024 Example Corp.
+      style: secondary
+      start: 27
+      end: 58

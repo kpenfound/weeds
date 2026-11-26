@@ -14,6 +14,28 @@ valid:
     package main
 
     func main() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    func Run() {}
+  - |
+    package main
+    //weeds-nl
+
+    //weeds-nl
+    //go:embed data.txt
+    //weeds-nl
+    var data string
+  - |
+    package main
+    //weeds-nl
+
+    //weeds-nl
+    func main() {}
 invalid:
   - |
     package main
@@ -34,4 +56,36 @@ invalid:
   - |
     package main
 
+    var x = 1 // trailing
+  - |
+    package main
+    //weeds-nl
+
+    //weeds-nl
+    // main starts the program.
+    //weeds-nl
+    func main() {}
+  - |
+    package main
+    //weeds-nl
+
+    //weeds-nl
+    func main() {
+    //weeds-nl
+    	// body
+    //weeds-nl
+    }
+  - |
+    package main
+    //weeds-nl
+
+    //weeds-nl
+    // Run is exported.
+    //weeds-nl
+    func Run() {}
+  - |
+    package main
+    //weeds-nl
+
+    //weeds-nl
     var x = 1 // trailing

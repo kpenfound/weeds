@@ -120,3 +120,159 @@ snapshots:
       style: primary
       start: 11
       end: 15
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // doSomething(x);
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // doSomething(x);
+      style: primary
+      start: 33
+      end: 51
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // fmt.Println("debug")
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // fmt.Println("debug")
+      style: primary
+      start: 33
+      end: 56
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // for i := 0; i < 3; i++ {
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // for i := 0; i < 3; i++ {
+      style: primary
+      start: 33
+      end: 60
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // func old() {
+    //weeds-nl
+    func New() {}
+  : labels:
+    - source: // func old() {
+      style: primary
+      start: 33
+      end: 48
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // if err != nil {
+    //weeds-nl
+    var x = 1
+  : labels:
+    - source: // if err != nil {
+      style: primary
+      start: 33
+      end: 51
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // import "fmt"
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // import "fmt"
+      style: primary
+      start: 33
+      end: 48
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // return err
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // return err
+      style: primary
+      start: 33
+      end: 46
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // type T struct {
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // type T struct {
+      style: primary
+      start: 33
+      end: 51
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // var cache = map[string]int{}
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // var cache = map[string]int{}
+      style: primary
+      start: 33
+      end: 64
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // x := compute()
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // x := compute()
+      style: primary
+      start: 33
+      end: 50
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // y = 2
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // y = 2
+      style: primary
+      start: 33
+      end: 41
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // }
+    //weeds-nl
+    var y = 1
+  : labels:
+    - source: // }
+      style: primary
+      start: 33
+      end: 37

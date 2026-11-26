@@ -9,6 +9,18 @@ valid:
   - |
     // TODOS is not the marker
     function run() {}
+  - |
+    /** Starts the work. */
+    //weeds-nl
+    export function run() {}
+  - |
+    // todo in lower case is an ordinary word
+    //weeds-nl
+    function run() {}
+  - |
+    // TODOS is not the marker
+    //weeds-nl
+    function run() {}
 invalid:
   - |
     // TODO: handle the error
@@ -28,4 +40,32 @@ invalid:
     }
   - |
     /// <reference path="x.d.ts" /> TODO
+    export const a = 1;
+  - |
+    // TODO: handle the error
+    //weeds-nl
+    function run() {}
+  - |
+    /** FIXME: slow */
+    //weeds-nl
+    export function run() {}
+  - |
+    /*
+    //weeds-nl
+     * Starts the work.
+    //weeds-nl
+     * TODO: faster
+    //weeds-nl
+     */
+    //weeds-nl
+    export function run() {}
+  - |
+    function run() {
+    //weeds-nl
+      // FIXME later
+    //weeds-nl
+    }
+  - |
+    /// <reference path="x.d.ts" /> TODO
+    //weeds-nl
     export const a = 1;

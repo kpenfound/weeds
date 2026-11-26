@@ -1,0 +1,8 @@
+id: go-plain-comment
+language: Go
+rule:
+  kind: comment
+  not:
+    any:
+      - matches: go-directive
+      - matches: go-newline

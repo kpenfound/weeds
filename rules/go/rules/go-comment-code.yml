@@ -4,9 +4,7 @@ severity: hint
 message: commented-out code
 rule:
   all:
-    - kind: comment
-    - not:
-        matches: go-directive
+    - matches: go-plain-comment
     - not:
         matches: go-in-function
     - any:

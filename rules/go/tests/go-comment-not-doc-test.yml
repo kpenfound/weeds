@@ -67,6 +67,120 @@ valid:
     // a does nothing.
     //line a.go:10
     func A() {}
+  - |
+    // Package p does things.
+    //weeds-nl
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    //
+    //weeds-nl
+    //go:noinline
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    //go:build linux
+    //weeds-nl
+    var hidden = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // T is a type.
+    //weeds-nl
+    type T struct {
+    //weeds-nl
+    	// A is a field.
+    //weeds-nl
+    	A int
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    type (
+    //weeds-nl
+    	// X is a type.
+    //weeds-nl
+    	X int
+    //weeds-nl
+    )
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    const (
+    //weeds-nl
+    	// C is a constant.
+    //weeds-nl
+    	C = 1
+    //weeds-nl
+    )
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // V holds values.
+    //weeds-nl
+    var (
+    //weeds-nl
+    	v = 1
+    //weeds-nl
+    	W = 2
+    //weeds-nl
+    )
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // I is an interface.
+    //weeds-nl
+    type I interface {
+    //weeds-nl
+    	// M does it.
+    //weeds-nl
+    	M()
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Do runs the method.
+    //weeds-nl
+    func (t T) Do() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // a does nothing.
+    //weeds-nl
+    //line a.go:10
+    //weeds-nl
+    func A() {}
 invalid:
   - |
     package p
@@ -139,4 +253,126 @@ invalid:
     package p
 
     /* header */
+    import "fmt"
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // run starts the work.
+    //weeds-nl
+    func run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {
+    //weeds-nl
+    	// body
+    //weeds-nl
+    	x := 1
+    //weeds-nl
+    	_ = x
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    var f = func() {
+    //weeds-nl
+    	// closure
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {
+    //weeds-nl
+    	// Local is declared in a function.
+    //weeds-nl
+    	type Local struct {
+    //weeds-nl
+    		// Field is exported.
+    //weeds-nl
+    		Field int
+    //weeds-nl
+    	}
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // stray comment at the end
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    type T struct {
+    //weeds-nl
+    	// b is unexported.
+    //weeds-nl
+    	b int
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    const (
+    //weeds-nl
+    	// c is unexported.
+    //weeds-nl
+    	c = 1
+    //weeds-nl
+    )
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // not a directive, no colon
+    //weeds-nl
+    //gox:thing
+    //weeds-nl
+    func a() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // T is exported.
+    //weeds-nl
+    type T struct {
+    //weeds-nl
+    	c int // trailing is judged elsewhere
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    type i interface {
+    //weeds-nl
+    	// M is a method of an unexported interface.
+    //weeds-nl
+    	M()
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    /* header */
+    //weeds-nl
     import "fmt"

@@ -364,54 +364,54 @@ type WeedsTests {
   }
 
   """
-  The comments check's Dang logic (precedence, headers, adjacency, rule
-  registration) on in-memory ast-grep matches.
+  The comments check's Dang logic on in-memory ast-grep matches (lines count
+  from 0 in the original file): which rule wins when several match one
+  comment, how the trailing and blank-line violations are reported, licence
+  headers, generated files, and rule registration.
   """
   pub commentLogic: Void @check {
     let shared = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
 
-    let unknown = { shared.classifyComments("a.go", "package a\n", sgMatches([sgMatch("go-comment-made-up", 0, 0, 0)])); "accepted" } rescue { err: Error => err.message }
+    let unknown = { shared.classifyComments("a.go", sgMatches([sgMatch("go-comment-made-up", 0, 0)])); "accepted" } rescue { err: Error => err.message }
     expect(unknown.contains("go-comment-made-up") and unknown.contains("not registered"), "an unregistered rule id must fail loudly, got: " + unknown)
-    expect(shared.classifyComments("a.go", "package a\n// c\n", sgMatches([sgMatch("unused-suppression", 1, 0, 1)])) == "", "ast-grep's built-in unused-suppression must be ignored")
+    expect(shared.classifyComments("a.go", sgMatches([sgMatch("unused-suppression", 1, 0)])) == "", "ast-grep's built-in unused-suppression must be ignored")
+    expect(shared.classifyComments("a.go", "[]") == "", "a file whose comments all comply has no match and no finding")
 
-    let layers = sgMatches([sgMatch("go-comment-not-doc", 1, 0, 1), sgMatch("go-doc-candidate", 1, 0, 1), sgMatch("go-comment-main", 1, 0, 1)])
-    expect(shared.classifyComments("a.go", "package main\n// c\nvar x = 1\n", layers) == "a.go:2: go-comment-main: comment in package main", "one comment must give one finding, the most specific rule winning")
-    let todoWins = sgMatches([sgMatch("go-comment-main", 1, 0, 1), sgMatch("go-comment-todo", 1, 0, 1)])
-    expect(shared.classifyComments("a.go", "package main\n// TODO c\n", todoWins).contains("go-comment-todo"), "TODO must win over a location rule")
+    let layers = sgMatches([sgMatch("go-comment-blank-line", 1, 0), sgMatch("go-comment-not-doc", 1, 0), sgMatch("go-comment-main", 1, 0)])
+    expect(shared.classifyComments("a.go", layers) == "a.go:2: go-comment-main: comment in package main", "one comment must give one finding, the most specific rule winning")
+    let notDocWins = sgMatches([sgMatch("go-comment-blank-line", 1, 0), sgMatch("go-comment-not-doc", 1, 0)])
+    expect(shared.classifyComments("a.go", notDocWins) == "a.go:2: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier", "not-doc must win over the blank-line violation")
+    let todoWins = sgMatches([sgMatch("go-comment-main", 1, 0), sgMatch("go-comment-todo", 1, 0), sgMatch("go-comment-trailing", 1, 0)])
+    expect(shared.classifyComments("a.go", todoWins) == "a.go:2: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note", "TODO must win over a location rule and the trailing rule, got: " + shared.classifyComments("a.go", todoWins))
+    let twoOnALine = sgMatches([sgMatch("go-comment-main", 1, 0), sgMatch("go-comment-trailing", 1, 12)])
+    expect(shared.classifyComments("a.go", twoOnALine) == "a.go:2: go-comment-detached: trailing comment\na.go:2: go-comment-main: comment in package main", "each comment on a line is judged by its own matches")
+    let trailingWins = sgMatches([sgMatch("go-comment-main", 1, 12), sgMatch("go-comment-trailing", 1, 12), sgMatch("go-comment-not-doc", 1, 12)])
+    expect(shared.classifyComments("a.go", trailingWins) == "a.go:2: go-comment-detached: trailing comment", "a trailing comment is detached whatever else it breaks, got: " + shared.classifyComments("a.go", trailingWins))
 
-    let attached = shared.classifyComments("a.go", "package a\n// Doc.\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
-    expect(attached == "", "an adjacent doc comment passes, got: " + attached)
-    let gap = shared.classifyComments("a.go", "package a\n// Doc.\n\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
+    let gap = shared.classifyComments("a.go", sgMatches([sgMatch("go-comment-blank-line", 1, 0)]))
     expect(gap == "a.go:2: go-comment-detached: doc comment is separated from its declaration by a blank line", "a blank line detaches a doc comment, got: " + gap)
-    let viaDirective = shared.classifyComments("a.go", "package a\n// Doc.\n//go:noinline\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
-    expect(viaDirective == "", "a directive line must not detach a doc comment, got: " + viaDirective)
-    let directiveThenGap = shared.classifyComments("a.go", "package a\n// Doc.\n//go:noinline\n\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
-    expect(directiveThenGap.contains("go-comment-detached"), "a blank line after the directive still detaches, got: " + directiveThenGap)
-    let blockDoc = shared.classifyComments("a.ts", "/**\n * Doc.\n */\nexport const a = 1;\n", sgMatches([sgMatch("ts-doc-candidate", 0, 0, 2)]))
-    expect(blockDoc == "", "a multi-line doc block directly above its declaration passes, got: " + blockDoc)
-    let blockGap = shared.classifyComments("a.ts", "/**\n * Doc.\n */\n\nexport const a = 1;\n", sgMatches([sgMatch("ts-doc-candidate", 0, 0, 2)]))
-    expect(blockGap == "a.ts:1: ts-comment-detached: doc comment is separated from its declaration by a blank line", "a doc block is judged from its last line, got: " + blockGap)
-    let trailing = shared.classifyComments("a.go", "package a\nvar A = 1 // note\n", sgMatches([sgMatch("go-doc-candidate", 1, 12, 1)]))
+    let blockGap = shared.classifyComments("a.ts", sgMatches([sgMatch("ts-comment-blank-line", 0, 0)]))
+    expect(blockGap == "a.ts:1: ts-comment-detached: doc comment is separated from its declaration by a blank line", "a doc block is reported at its first line, got: " + blockGap)
+    let trailing = shared.classifyComments("a.go", sgMatches([sgMatch("go-comment-trailing", 1, 12)]))
     expect(trailing == "a.go:2: go-comment-detached: trailing comment", "a trailing comment is detached, got: " + trailing)
 
-    let licence = "// Copyright 2024 Example Corp.\n// Licensed under MIT.\n\npackage main\n"
-    let headerMatches = sgMatches([sgMatch("go-comment-main", 0, 0, 0), sgMatch("go-comment-main", 1, 0, 1)])
-    expect(shared.classifyComments("a.go", licence, headerMatches) == "", "a licence header passes in package main")
-    let plain = "// Notes about the licence of this file.\n// More notes.\n\npackage main\n"
-    expect(shared.classifyComments("a.go", plain, headerMatches).contains("go-comment-main"), "a header without a licence or copyright line is not a licence header")
-    let headerTodo = "// Copyright 2024 Example Corp.\n// TODO: year.\n\npackage main\n"
-    expect(shared.classifyComments("a.go", headerTodo, sgMatches([sgMatch("go-comment-todo", 1, 0, 1), sgMatch("go-comment-main", 1, 0, 1)])) == "a.go:2: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note", "a TODO inside a licence header is reported")
-    let tsHeader = "/*\n * Copyright 2024 Example Corp.\n */\n\nexport const a = 1;\n"
-    expect(shared.classifyComments("a.ts", tsHeader, sgMatches([sgMatch("ts-comment-not-doc", 0, 0, 2)])) == "", "a block licence header passes")
+    let header = sgMatches([sgMatch("go-comment-main", 0, 0), sgMatch("go-comment-main", 1, 0), sgMatch("go-licence-header", 0, 0), sgMatch("go-licence-header", 1, 0)])
+    expect(shared.classifyComments("a.go", header) == "", "a licence header passes in package main")
+    let beyondHeader = sgMatches([sgMatch("go-comment-main", 3, 0), sgMatch("go-licence-header", 0, 0), sgMatch("go-licence-header", 1, 0)])
+    expect(shared.classifyComments("a.go", beyondHeader) == "a.go:4: go-comment-main: comment in package main", "only the lines of the header are exempt")
+    let headerTodo = sgMatches([sgMatch("go-comment-todo", 1, 0), sgMatch("go-comment-main", 1, 0), sgMatch("go-licence-header", 0, 0), sgMatch("go-licence-header", 1, 0)])
+    expect(shared.classifyComments("a.go", headerTodo) == "a.go:2: go-comment-todo: TODO or FIXME comment; fix the code instead of leaving a note", "a TODO inside a licence header is reported")
+    let headerTrailing = sgMatches([sgMatch("ts-comment-trailing", 0, 4), sgMatch("ts-licence-header", 0, 4)])
+    expect(shared.classifyComments("a.ts", headerTrailing) == "", "a licence header comment is exempt from the trailing rule")
 
-    let generated = sgMatches([sgMatch("go-comment-todo", 2, 0, 2), sgMatch("go-comment-not-doc", 3, 0, 3)])
-    expect(shared.classifyComments("g.go", "// Code generated by tool; DO NOT EDIT.\n\n// TODO x\n// c\npackage g\n", generated) == "", "a generated Go file has no findings")
-    expect(shared.classifyComments("g.go", "package g\n// Code generated by tool; DO NOT EDIT.\n// TODO x\n", sgMatches([sgMatch("go-comment-todo", 2, 0, 2)])) != "", "the generated marker only counts before the first code line")
-    expect(shared.classifyComments("g.ts", "// @generated\n// TODO x\nexport const a = 1;\n", sgMatches([sgMatch("ts-comment-todo", 1, 0, 1)])) == "", "a generated TS file has no findings")
-    expect(shared.classifyComments("g.ts", "// generated by the api tool\n// TODO x\nexport const a = 1;\n", sgMatches([sgMatch("ts-comment-todo", 1, 0, 1)])) == "", "a 'generated by' TS file has no findings")
+    let generated = sgMatches([sgMatch("go-generated-file", 0, 0), sgMatch("go-comment-todo", 2, 0), sgMatch("go-comment-not-doc", 3, 0)])
+    expect(shared.classifyComments("g.go", generated) == "", "a generated Go file has no findings")
+    expect(shared.classifyComments("g.ts", sgMatches([sgMatch("ts-comment-todo", 1, 0), sgMatch("ts-generated-file", 0, 0)])) == "", "a generated TS file has no findings")
+    expect(shared.classifyComments("g.go", sgMatches([sgMatch("go-comment-todo", 2, 0)])) != "", "without a generated-file match a TODO is reported")
+    expect(shared.classifyComments("g.go", sgMatches([sgMatch("go-generated-file", 0, 0), sgMatch("go-licence-header", 1, 0)])) == "", "facts about a file are not findings")
 
-    let ignored = shared.classifyComments("a.go", "package a\n// ast-grep-ignore\nfunc A() {}\n", sgMatches([sgMatch("go-doc-candidate", 1, 0, 1)]))
-    expect(ignored == "a.go:2: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier", "an ast-grep-ignore directive is never a doc comment, got: " + ignored)
+    let ignored = shared.classifyComments("a.go", sgMatches([sgMatch("go-comment-not-doc", 1, 0)]))
+    expect(ignored == "a.go:2: go-comment-not-doc: comment is not an adjacent doc comment on an exported identifier", "a not-doc comment is reported under go-comment-not-doc, got: " + ignored)
     null
   }
 
@@ -449,12 +449,12 @@ type WeedsTests {
     let scanned = shared.commentScanRules
     (ruleIdsOf(goRules) + ruleIdsOf(typescriptRules)).each { id =>
       if (!scanned.contains(id)) {
-        problems += ["rule " + id + " is not registered in registry.dang (commentsRules or commentMarkerRules)"]
+        problems += ["rule " + id + " is not registered in registry.dang (commentsRules) or comments.dang (commentDetectorRules)"]
       }
     }
-    shared.registeredCommentRules.each { id =>
+    scanned.each { id =>
       if (!id.hasSuffix("-detached") and !ruleIdsOf(goRules).contains(id) and !ruleIdsOf(typescriptRules).contains(id)) {
-        problems += ["registered comments rule " + id + " has no rule file"]
+        problems += ["scanned comments rule " + id + " has no rule file"]
       }
     }
     if (!problems.isEmpty) {

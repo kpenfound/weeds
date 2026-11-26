@@ -288,7 +288,7 @@ type Weeds {
   line (empty when there are none). The check itself fails with this text.
   """
   pub commentsReport: String! {
-    renderFindings(applyExceptions("comments", commentsFor(scanTree, scanFiles), settings))
+    renderFindings(applyExceptions("comments", commentsFor(files), settings))
   }
 
   """
@@ -296,7 +296,7 @@ type Weeds {
   identifiers, tool directives, licence headers and generated files.
   """
   pub comments: Void @check {
-    verdict("comments", commentsFor(scanTree, scanFiles))
+    verdict("comments", commentsFor(files))
   }
 
   """
@@ -328,22 +328,24 @@ type Weeds {
   }
 
   """
-  Classify the ast-grep matches (a JSON array) for one file's text exactly as
-  the comments check does, without running ast-grep. Fails on a rule id that
-  is not registered.
+  Classify the ast-grep matches (a JSON array, with lines of the original file
+  starting at 0) for one file exactly as the comments check does, without
+  running ast-grep. Fails on a rule id that is not registered.
   """
-  pub classifyComments(path: String!, text: String!, matches: String!): String! {
+  pub classifyComments(path: String!, matches: String!): String! {
     let found = JSON.decode(matches) :: [SgMatch!]!
     found.each { m => checkCommentRule(m.ruleId) }
-    renderFindings(commentFindings(path, text, found.filter { m => !commentIgnoredRules.contains(m.ruleId) }))
+    renderFindings(commentFindings(path, found.filter { m => !commentIgnoredRules.contains(m.ruleId) }))
   }
 
   """
-  Every rule id a comment scan may report: registered rules and the doc
-  candidate markers the check consumes.
+  Every rule id a comment scan may report: registered rules and the rules
+  whose matches the check turns into a registered rule or uses as facts about
+  a file (trailing and blank-line violations, generated files, licence
+  headers).
   """
   pub commentScanRules: [String!]! {
-    commentsRules + commentMarkerRules
+    commentsRules + commentDetectorRules
   }
 
   """

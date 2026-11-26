@@ -2,6 +2,15 @@ id: ts-comment-not-doc
 snapshots:
   ? |
     /** Hidden. */
+    //weeds-nl
+    function hidden() {}
+  : labels:
+    - source: /** Hidden. */
+      style: primary
+      start: 0
+      end: 14
+  ? |
+    /** Hidden. */
     function hidden() {}
   : labels:
     - source: /** Hidden. */
@@ -15,6 +24,15 @@ snapshots:
       style: primary
       start: 0
       end: 24
+  ? |
+    // Plain comments are not doc comments.
+    //weeds-nl
+    export function run() {}
+  : labels:
+    - source: // Plain comments are not doc comments.
+      style: primary
+      start: 0
+      end: 39
   ? |
     // Plain comments are not doc comments.
     export function run() {}
@@ -33,6 +51,17 @@ snapshots:
       start: 0
       end: 41
   ? |
+    // ts-ignore is not a tool directive here
+    //weeds-nl
+    // @ts-nocheck
+    //weeds-nl
+    export const a = 1;
+  : labels:
+    - source: // ts-ignore is not a tool directive here
+      style: primary
+      start: 0
+      end: 41
+  ? |
     class Hidden {
       /** Member of an unexported class. */
       a = 1;
@@ -42,6 +71,19 @@ snapshots:
       style: primary
       start: 17
       end: 54
+  ? |
+    class Hidden {
+    //weeds-nl
+      /** Member of an unexported class. */
+    //weeds-nl
+      a = 1;
+    //weeds-nl
+    }
+  : labels:
+    - source: /** Member of an unexported class. */
+      style: primary
+      start: 28
+      end: 65
   ? |
     const view = <div>{/* in jsx */}</div>;
   : labels:
@@ -98,6 +140,69 @@ snapshots:
       start: 21
       end: 48
   ? |
+    export class Foo {
+    //weeds-nl
+      /** Hash private. */
+    //weeds-nl
+      #d = 3;
+    //weeds-nl
+    }
+  : labels:
+    - source: /** Hash private. */
+      style: primary
+      start: 32
+      end: 52
+  ? |
+    export class Foo {
+    //weeds-nl
+      /** Private. */
+    //weeds-nl
+      private b = 1;
+    //weeds-nl
+    }
+  : labels:
+    - source: /** Private. */
+      style: primary
+      start: 32
+      end: 47
+  ? |
+    export class Foo {
+    //weeds-nl
+      /** Protected. */
+    //weeds-nl
+      protected c = 2;
+    //weeds-nl
+    }
+  : labels:
+    - source: /** Protected. */
+      style: primary
+      start: 32
+      end: 49
+  ? |
+    export class Foo {
+    //weeds-nl
+      m(): void {
+    //weeds-nl
+        // body
+    //weeds-nl
+      }
+    //weeds-nl
+    }
+  : labels:
+    - source: // body
+      style: primary
+      start: 59
+      end: 66
+    - source: |-
+        m(): void {
+        //weeds-nl
+            // body
+        //weeds-nl
+          }
+      style: secondary
+      start: 32
+      end: 81
+  ? |
     export const a = () => {
       // body
     };
@@ -113,6 +218,26 @@ snapshots:
       style: secondary
       start: 17
       end: 36
+  ? |
+    export const a = () => {
+    //weeds-nl
+      // body
+    //weeds-nl
+    };
+  : labels:
+    - source: // body
+      style: primary
+      start: 38
+      end: 45
+    - source: |-
+        () => {
+        //weeds-nl
+          // body
+        //weeds-nl
+        }
+      style: secondary
+      start: 17
+      end: 58
   ? |
     export const a = 1; // trailing
   : labels:
@@ -156,3 +281,51 @@ snapshots:
       style: secondary
       start: 7
       end: 50
+  ? |
+    export function run() {
+    //weeds-nl
+      /** JSDoc inside a function. */
+    //weeds-nl
+      const x = 1;
+    //weeds-nl
+    }
+  : labels:
+    - source: /** JSDoc inside a function. */
+      style: primary
+      start: 37
+      end: 68
+    - source: |-
+        function run() {
+        //weeds-nl
+          /** JSDoc inside a function. */
+        //weeds-nl
+          const x = 1;
+        //weeds-nl
+        }
+      style: secondary
+      start: 7
+      end: 107
+  ? |
+    export function run() {
+    //weeds-nl
+      // body
+    //weeds-nl
+      const x = 1;
+    //weeds-nl
+    }
+  : labels:
+    - source: // body
+      style: primary
+      start: 37
+      end: 44
+    - source: |-
+        function run() {
+        //weeds-nl
+          // body
+        //weeds-nl
+          const x = 1;
+        //weeds-nl
+        }
+      style: secondary
+      start: 7
+      end: 83

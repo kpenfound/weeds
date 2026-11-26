@@ -1,0 +1,69 @@
+id: ts-comment-trailing
+valid:
+  - |
+    /** Run starts the work. */
+    //weeds-nl
+    export function run(): void {}
+  - |
+    export const a = 1; // @ts-check
+  - |
+    // Standalone.
+    //weeds-nl
+    export const a = 1;
+  - |
+    export function run(): void {
+    //weeds-nl
+      // body
+    //weeds-nl
+      const x = 1;
+    //weeds-nl
+    }
+  - |
+    /* block */
+    //weeds-nl
+    export const a = 1;
+  - |
+    export class Foo {
+    //weeds-nl
+      /** A field. */
+    //weeds-nl
+      a = 1;
+    //weeds-nl
+    }
+  - |
+    export const a = 1;
+    //weeds-nl
+
+    //weeds-nl
+    // after a blank line
+    //weeds-nl
+    export const b = 2;
+  - |
+    #!/usr/bin/env node
+    //weeds-nl
+    // Standalone.
+    //weeds-nl
+    export const a = 1;
+invalid:
+  - |
+    export const a = 1; // note
+  - |
+    export function run(): void { // note
+    //weeds-nl
+    }
+  - |
+    export class Foo {
+    //weeds-nl
+      a = 1; // note
+    //weeds-nl
+    }
+  - |
+    export const a = 1; /* note */
+  - |
+    /* first */ // second
+    //weeds-nl
+    export const a = 1;
+  - |
+    export const a = 1; // TODO: later
+  - |
+    export const a = () => <T,>(x: T) => x; // note

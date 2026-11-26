@@ -1,0 +1,97 @@
+id: go-licence-header
+valid:
+  - |
+    // Notes about the licence of this file.
+    //weeds-nl
+    // More notes.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    var x = 1
+  - |
+    // Package p does things.
+    //weeds-nl
+    package p
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {
+    //weeds-nl
+    	// Copyright 2024 Example Corp.
+    //weeds-nl
+    }
+  - |
+    package p
+invalid:
+  - |
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    // Licensed under MIT.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  - |
+    // Header line.
+    //weeds-nl
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    // More lines.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  - |
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+
+    //weeds-nl
+    // Package p does things.
+    //weeds-nl
+    package p
+  - |
+    // Use of this source code is governed by the MIT licence.
+    //weeds-nl
+    package p
+  - |
+    // SPDX-License-Identifier: MIT
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  - |
+    /*
+    //weeds-nl
+     * Copyright 2024 Example Corp.
+    //weeds-nl
+     */
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  - |
+    // (c) 2024 Example Corp.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  - |
+    //go:build linux
+    //weeds-nl
+
+    //weeds-nl
+    // All rights reserved.
+    //weeds-nl
+
+    //weeds-nl
+    package p

@@ -1,0 +1,119 @@
+id: go-comment-trailing
+valid:
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    var x = 1 //go:noinline
+  - |
+    // Package p does things.
+    //weeds-nl
+    package p
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {
+    //weeds-nl
+    	// body
+    //weeds-nl
+    	x := 1
+    //weeds-nl
+    	_ = x
+    //weeds-nl
+    }
+  - |
+    /* block */
+    //weeds-nl
+    package p
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    type T struct {
+    //weeds-nl
+    	// A is a field.
+    //weeds-nl
+    	A int
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    var x = 1
+    //weeds-nl
+
+    //weeds-nl
+    // after a blank line
+    //weeds-nl
+    var y = 2
+invalid:
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    var x = 1 // note
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func Run() { // note
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    type T struct {
+    //weeds-nl
+    	A int // field note
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    var x = 1 /* note */
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    /* first */ // second
+    //weeds-nl
+    var x = 1
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    var x = 1 // TODO: later
+  - |
+    package main
+    //weeds-nl
+
+    //weeds-nl
+    func main() {
+    //weeds-nl
+    	x := 1 // note
+    //weeds-nl
+    	_ = x
+    //weeds-nl
+    }

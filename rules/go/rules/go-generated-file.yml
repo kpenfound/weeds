@@ -1,0 +1,9 @@
+id: go-generated-file
+language: Go
+severity: hint
+message: generated file
+rule:
+  all:
+    - kind: comment
+    - regex: '(?m)^// Code generated .* DO NOT EDIT\.\r?$'
+    - matches: go-leading

@@ -1,0 +1,20 @@
+id: ts-comment-blank-line
+language: TypeScript
+severity: hint
+message: doc comment is separated from its declaration by a blank line
+rule:
+  all:
+    - matches: ts-jsdoc
+    - matches: ts-plain-comment
+    - not:
+        matches: ts-in-function
+    - precedes:
+        stopBy:
+          not:
+            kind: comment
+        matches: ts-doc-target
+    - precedes:
+        stopBy:
+          not:
+            kind: comment
+        matches: ts-blank-line

@@ -4,9 +4,7 @@ severity: hint
 message: commented-out code
 rule:
   all:
-    - kind: comment
-    - not:
-        matches: ts-directive
+    - matches: ts-plain-comment
     - not:
         matches: ts-in-function
     - any:

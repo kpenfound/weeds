@@ -44,6 +44,74 @@ valid:
     /** The doc. */
     /// <reference path="x.d.ts" />
     export const a = 1;
+  - |
+    /// <reference path="x.d.ts" />
+    //weeds-nl
+    // @ts-check
+    //weeds-nl
+    /** Starts the work. */
+    //weeds-nl
+    export function run() {}
+  - |
+    // @jsx h
+    //weeds-nl
+    /** @jsxImportSource preact */
+    //weeds-nl
+    export const a = 1;
+  - |
+    // @flow
+    //weeds-nl
+    export const a = 1;
+  - |
+    export const a = 1;
+    //weeds-nl
+    //# sourceMappingURL=a.js.map
+  - |
+    export const a = <T>(x: T) => <T>x;
+  - |
+    /** A CommonJS export. */
+    //weeds-nl
+    module.exports = { a: 1 };
+  - |
+    /** A class. */
+    //weeds-nl
+    export class Foo {
+    //weeds-nl
+      /** A field. */
+    //weeds-nl
+      a = 1;
+    //weeds-nl
+      /** A method. */
+    //weeds-nl
+      m(): void {}
+    //weeds-nl
+    }
+  - |
+    /** An interface. */
+    //weeds-nl
+    export interface I {
+    //weeds-nl
+      /** A member. */
+    //weeds-nl
+      x: number;
+    //weeds-nl
+    }
+  - |
+    /** An enum. */
+    //weeds-nl
+    export enum E {
+    //weeds-nl
+      /** A member. */
+    //weeds-nl
+      A,
+    //weeds-nl
+    }
+  - |
+    /** The doc. */
+    //weeds-nl
+    /// <reference path="x.d.ts" />
+    //weeds-nl
+    export const a = 1;
 invalid:
   - |
     /** Hidden. */
@@ -96,6 +164,88 @@ invalid:
   - |
     // ts-ignore is not a tool directive here
     // @ts-nocheck
+    export const a = 1;
+  - |
+    export const a = 1; // trailing
+  - |
+    /** Hidden. */
+    //weeds-nl
+    function hidden() {}
+  - |
+    // Plain comments are not doc comments.
+    //weeds-nl
+    export function run() {}
+  - |
+    export function run() {
+    //weeds-nl
+      // body
+    //weeds-nl
+      const x = 1;
+    //weeds-nl
+    }
+  - |
+    export function run() {
+    //weeds-nl
+      /** JSDoc inside a function. */
+    //weeds-nl
+      const x = 1;
+    //weeds-nl
+    }
+  - |
+    export const a = () => {
+    //weeds-nl
+      // body
+    //weeds-nl
+    };
+  - |
+    export class Foo {
+    //weeds-nl
+      m(): void {
+    //weeds-nl
+        // body
+    //weeds-nl
+      }
+    //weeds-nl
+    }
+  - |
+    export class Foo {
+    //weeds-nl
+      /** Private. */
+    //weeds-nl
+      private b = 1;
+    //weeds-nl
+    }
+  - |
+    export class Foo {
+    //weeds-nl
+      /** Protected. */
+    //weeds-nl
+      protected c = 2;
+    //weeds-nl
+    }
+  - |
+    export class Foo {
+    //weeds-nl
+      /** Hash private. */
+    //weeds-nl
+      #d = 3;
+    //weeds-nl
+    }
+  - |
+    class Hidden {
+    //weeds-nl
+      /** Member of an unexported class. */
+    //weeds-nl
+      a = 1;
+    //weeds-nl
+    }
+  - |
+    /** Last in the file. */
+  - |
+    // ts-ignore is not a tool directive here
+    //weeds-nl
+    // @ts-nocheck
+    //weeds-nl
     export const a = 1;
   - |
     export const a = 1; // trailing

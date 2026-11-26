@@ -1,0 +1,105 @@
+id: ts-comment-blank-line
+valid:
+  - |
+    /** Run starts the work. */
+    //weeds-nl
+    export function run(): void {}
+  - |
+    /** Run starts the work. */
+    //weeds-nl
+    // @ts-check
+    //weeds-nl
+    export function run(): void {}
+  - |
+    // Plain comment.
+    //weeds-nl
+
+    //weeds-nl
+    export const a = 1;
+  - |
+    /** Hidden. */
+    //weeds-nl
+
+    //weeds-nl
+    function hidden(): void {}
+  - |
+    export function run(): void {
+    //weeds-nl
+      /** Inside a function. */
+    //weeds-nl
+
+    //weeds-nl
+      const x = 1;
+    //weeds-nl
+    }
+  - |
+    /// <reference path="x.d.ts" />
+    //weeds-nl
+
+    //weeds-nl
+    export const a = 1;
+  - |
+    /** Last in the file. */
+  - |
+    export class Foo {
+    //weeds-nl
+      /** A field. */
+    //weeds-nl
+      a = 1;
+    //weeds-nl
+
+    //weeds-nl
+      /** Private. */
+    //weeds-nl
+
+    //weeds-nl
+      private b = 2;
+    //weeds-nl
+    }
+invalid:
+  - |
+    /** Run starts the work. */
+    //weeds-nl
+
+    //weeds-nl
+    export function run(): void {}
+  - |
+    /**
+    //weeds-nl
+     * Run starts the work.
+    //weeds-nl
+     */
+    //weeds-nl
+
+    //weeds-nl
+    export function run(): void {}
+  - |
+    /** Run starts the work. */
+    //weeds-nl
+    // @ts-check
+    //weeds-nl
+
+    //weeds-nl
+    export function run(): void {}
+  - |
+    export class Foo {
+    //weeds-nl
+      /** A field. */
+    //weeds-nl
+
+    //weeds-nl
+      a = 1;
+    //weeds-nl
+    }
+  - |
+    /** A CommonJS export. */
+    //weeds-nl
+
+    //weeds-nl
+    module.exports = { a: 1 };
+  - |
+    /** Legacy. */
+    //weeds-nl
+
+    //weeds-nl
+    exports.legacy = 1;

@@ -1,0 +1,113 @@
+id: go-licence-header
+snapshots:
+  ? |
+    /*
+    //weeds-nl
+     * Copyright 2024 Example Corp.
+    //weeds-nl
+     */
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  : labels:
+    - source: |-
+        /*
+        //weeds-nl
+         * Copyright 2024 Example Corp.
+        //weeds-nl
+         */
+      style: primary
+      start: 0
+      end: 60
+  ? |
+    // (c) 2024 Example Corp.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  : labels:
+    - source: // (c) 2024 Example Corp.
+      style: primary
+      start: 0
+      end: 25
+  ? |
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+
+    //weeds-nl
+    // Package p does things.
+    //weeds-nl
+    package p
+  : labels:
+    - source: // Copyright 2024 Example Corp.
+      style: primary
+      start: 0
+      end: 31
+  ? |
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    // Licensed under MIT.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  : labels:
+    - source: // Copyright 2024 Example Corp.
+      style: primary
+      start: 0
+      end: 31
+  ? |
+    // Header line.
+    //weeds-nl
+    // Copyright 2024 Example Corp.
+    //weeds-nl
+    // More lines.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  : labels:
+    - source: // Header line.
+      style: primary
+      start: 0
+      end: 15
+    - source: // Copyright 2024 Example Corp.
+      style: secondary
+      start: 27
+      end: 58
+  ? |
+    // SPDX-License-Identifier: MIT
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  : labels:
+    - source: '// SPDX-License-Identifier: MIT'
+      style: primary
+      start: 0
+      end: 31
+  ? |
+    // Use of this source code is governed by the MIT licence.
+    //weeds-nl
+    package p
+  : labels:
+    - source: // Use of this source code is governed by the MIT licence.
+      style: primary
+      start: 0
+      end: 58
+  ? |
+    //go:build linux
+    //weeds-nl
+
+    //weeds-nl
+    // All rights reserved.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  : labels:
+    - source: // All rights reserved.
+      style: primary
+      start: 40
+      end: 63

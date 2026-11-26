@@ -1,0 +1,157 @@
+id: go-comment-blank-line
+valid:
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    //go:noinline
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // run is unexported.
+    //weeds-nl
+
+    //weeds-nl
+    func run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {
+    //weeds-nl
+    	// body
+    //weeds-nl
+
+    //weeds-nl
+    	x := 1
+    //weeds-nl
+    	_ = x
+    //weeds-nl
+    }
+  - |
+    //go:build linux
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // stray comment at the end
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    type T struct {
+    //weeds-nl
+    	// A is a field.
+    //weeds-nl
+    	A int
+    //weeds-nl
+
+    //weeds-nl
+    	// b is unexported.
+    //weeds-nl
+
+    //weeds-nl
+    	b int
+    //weeds-nl
+    }
+invalid:
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    //go:noinline
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {}
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    // More about it.
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {}
+  - |
+    // Package p does things.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    type T struct {
+    //weeds-nl
+    	// A is a field.
+    //weeds-nl
+
+    //weeds-nl
+    	A int
+    //weeds-nl
+    }
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // A is an alias.
+    //weeds-nl
+
+    //weeds-nl
+    type A = int
+  - |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    /*
+    //weeds-nl
+    Run starts the work.
+    //weeds-nl
+    */
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {}

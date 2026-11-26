@@ -94,3 +94,109 @@ snapshots:
       style: secondary
       start: 19
       end: 41
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    /* header */
+    //weeds-nl
+    import "fmt"
+  : labels:
+    - source: /* header */
+      style: primary
+      start: 33
+      end: 45
+  ? "package p\n//weeds-nl\n\n//weeds-nl\n// T is exported.\n//weeds-nl\ntype T struct {\n//weeds-nl\n\tc int // trailing is judged elsewhere\n//weeds-nl\n}\n"
+  : labels:
+    - source: // trailing is judged elsewhere
+      style: primary
+      start: 96
+      end: 127
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // not a directive, no colon
+    //weeds-nl
+    //gox:thing
+    //weeds-nl
+    func a() {}
+  : labels:
+    - source: // not a directive, no colon
+      style: primary
+      start: 33
+      end: 61
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // run starts the work.
+    //weeds-nl
+    func run() {}
+  : labels:
+    - source: // run starts the work.
+      style: primary
+      start: 33
+      end: 56
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // stray comment at the end
+  : labels:
+    - source: // stray comment at the end
+      style: primary
+      start: 33
+      end: 60
+  ? "package p\n//weeds-nl\n\n//weeds-nl\nconst (\n//weeds-nl\n\t// c is unexported.\n//weeds-nl\n\tc = 1\n//weeds-nl\n)\n"
+  : labels:
+    - source: // c is unexported.
+      style: primary
+      start: 53
+      end: 72
+  ? "package p\n//weeds-nl\n\n//weeds-nl\nfunc Run() {\n//weeds-nl\n\t// Local is declared in a function.\n//weeds-nl\n\ttype Local struct {\n//weeds-nl\n\t\t// Field is exported.\n//weeds-nl\n\t\tField int\n//weeds-nl\n\t}\n//weeds-nl\n}\n"
+  : labels:
+    - source: // Local is declared in a function.
+      style: primary
+      start: 58
+      end: 93
+    - source: "func Run() {\n//weeds-nl\n\t// Local is declared in a function.\n//weeds-nl\n\ttype Local struct {\n//weeds-nl\n\t\t// Field is exported.\n//weeds-nl\n\t\tField int\n//weeds-nl\n\t}\n//weeds-nl\n}"
+      style: secondary
+      start: 33
+      end: 210
+  ? "package p\n//weeds-nl\n\n//weeds-nl\nfunc Run() {\n//weeds-nl\n\t// body\n//weeds-nl\n\tx := 1\n//weeds-nl\n\t_ = x\n//weeds-nl\n}\n"
+  : labels:
+    - source: // body
+      style: primary
+      start: 58
+      end: 65
+    - source: "func Run() {\n//weeds-nl\n\t// body\n//weeds-nl\n\tx := 1\n//weeds-nl\n\t_ = x\n//weeds-nl\n}"
+      style: secondary
+      start: 33
+      end: 115
+  ? "package p\n//weeds-nl\n\n//weeds-nl\ntype T struct {\n//weeds-nl\n\t// b is unexported.\n//weeds-nl\n\tb int\n//weeds-nl\n}\n"
+  : labels:
+    - source: // b is unexported.
+      style: primary
+      start: 61
+      end: 80
+  ? "package p\n//weeds-nl\n\n//weeds-nl\ntype i interface {\n//weeds-nl\n\t// M is a method of an unexported interface.\n//weeds-nl\n\tM()\n//weeds-nl\n}\n"
+  : labels:
+    - source: // M is a method of an unexported interface.
+      style: primary
+      start: 64
+      end: 108
+  ? "package p\n//weeds-nl\n\n//weeds-nl\nvar f = func() {\n//weeds-nl\n\t// closure\n//weeds-nl\n}\n"
+  : labels:
+    - source: // closure
+      style: primary
+      start: 62
+      end: 72
+    - source: "func() {\n//weeds-nl\n\t// closure\n//weeds-nl\n}"
+      style: secondary
+      start: 41
+      end: 85

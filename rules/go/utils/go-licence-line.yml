@@ -1,0 +1,5 @@
+id: go-licence-line
+language: Go
+rule:
+  kind: comment
+  regex: '(?im)^[ \t\r]*(//+|/\*+!?|\*+|#)?[ \t\r]*(@?copyright\b|\(c\)|©|spdx-license-identifier|@?licen[cs]e[ds]?\b|permission is hereby|all rights reserved|use of this source code)'

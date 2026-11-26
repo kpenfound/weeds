@@ -115,13 +115,24 @@ their markers and any hand edit inside them.
 
 ### Comments
 
-`comments` runs a pinned ast-grep (0.39.5) in a container with the Weeds rule
-packs in `rules/go` and `rules/typescript` and reads its `--json` output. The
-consumer's ast-grep configuration is never read, and ast-grep's own inline
-suppression comment is neutralised in the scanned copy, so that comment is
-reported like any other. `.go` uses the Go grammar, `.ts` the TypeScript
-grammar, and `.tsx`, `.js`, `.jsx`, `.mjs` and `.cjs` the TSX grammar (the TSX
-pack is derived from the TypeScript pack at run time).
+`comments` uploads only the Go and TS/JS files that no ignore file leaves out
+and runs a pinned ast-grep (0.39.5) in a container once per Weeds rule pack
+(`rules/go`, `rules/typescript` and the TSX pack), reading its `--json` output.
+The packs report violations only: a doc comment that complies produces no
+match, and no file is read to judge one. The consumer's ast-grep configuration
+is never read, and ast-grep's own inline suppression comment is neutralised in
+the scanned copy, so that comment is reported like any other. `.go` uses the Go
+grammar, `.ts` the TypeScript grammar, and `.tsx`, `.js`, `.jsx`, `.mjs` and
+`.cjs` the TSX grammar (the TSX pack is derived from the TypeScript pack at run
+time).
+
+The rules cannot see line breaks in a syntax tree, so the scanned copy gets a
+`//weeds-nl` comment line before every line but the first. Two adjacent
+markers are a blank line, and a comment whose previous sibling is not a marker
+has code before it on its line. Generated files and licence headers are also
+rules (`go-generated-file`, `go-licence-header` and the `ts-` pair), so their
+facts come from the same scan. A licence header is a leading comment run that
+holds a licence or copyright line; a block comment counts whole.
 
 Allowed: a doc comment directly above an exported identifier in an importable
 package (Go: any comment, including the package comment and fields or methods

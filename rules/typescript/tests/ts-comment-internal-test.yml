@@ -10,6 +10,18 @@ valid:
     //# sourceMappingURL=a.js.map
   - |
     export const a = 1;
+  - |
+    /// <reference path="x.d.ts" />
+    //weeds-nl
+    export const a = 1;
+  - |
+    // @ts-check
+    //weeds-nl
+    export const a = 1;
+  - |
+    //# sourceMappingURL=a.js.map
+  - |
+    export const a = 1;
 invalid:
   - |
     /** Starts the work. */
@@ -23,4 +35,22 @@ invalid:
     const a = 1;
   - |
     // @ts-ignore
+    const a: number = "x";
+  - |
+    /** Starts the work. */
+    //weeds-nl
+    export function run() {}
+  - |
+    function run() {
+    //weeds-nl
+      // body
+    //weeds-nl
+    }
+  - |
+    // plain comment
+    //weeds-nl
+    const a = 1;
+  - |
+    // @ts-ignore
+    //weeds-nl
     const a: number = "x";

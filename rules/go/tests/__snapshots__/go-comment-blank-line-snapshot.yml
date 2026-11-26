@@ -1,0 +1,227 @@
+id: go-comment-blank-line
+snapshots:
+  ? |
+    // Package p does things.
+    //weeds-nl
+
+    //weeds-nl
+    package p
+  : labels:
+    - source: // Package p does things.
+      style: primary
+      start: 0
+      end: 25
+    - source: package p
+      style: secondary
+      start: 49
+      end: 58
+    - source: //weeds-nl
+      style: secondary
+      start: 26
+      end: 36
+    - source: //weeds-nl
+      style: secondary
+      start: 38
+      end: 48
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    /*
+    //weeds-nl
+    Run starts the work.
+    //weeds-nl
+    */
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {}
+  : labels:
+    - source: |-
+        /*
+        //weeds-nl
+        Run starts the work.
+        //weeds-nl
+        */
+      style: primary
+      start: 33
+      end: 81
+    - source: Run
+      style: secondary
+      start: 110
+      end: 113
+    - source: func Run() {}
+      style: secondary
+      start: 105
+      end: 118
+    - source: //weeds-nl
+      style: secondary
+      start: 82
+      end: 92
+    - source: //weeds-nl
+      style: secondary
+      start: 94
+      end: 104
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // A is an alias.
+    //weeds-nl
+
+    //weeds-nl
+    type A = int
+  : labels:
+    - source: // A is an alias.
+      style: primary
+      start: 33
+      end: 50
+    - source: A
+      style: secondary
+      start: 79
+      end: 80
+    - source: A = int
+      style: secondary
+      start: 79
+      end: 86
+    - source: type A = int
+      style: secondary
+      start: 74
+      end: 86
+    - source: //weeds-nl
+      style: secondary
+      start: 51
+      end: 61
+    - source: //weeds-nl
+      style: secondary
+      start: 63
+      end: 73
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {}
+  : labels:
+    - source: // Run starts the work.
+      style: primary
+      start: 33
+      end: 56
+    - source: Run
+      style: secondary
+      start: 85
+      end: 88
+    - source: func Run() {}
+      style: secondary
+      start: 80
+      end: 93
+    - source: //weeds-nl
+      style: secondary
+      start: 57
+      end: 67
+    - source: //weeds-nl
+      style: secondary
+      start: 69
+      end: 79
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    // More about it.
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {}
+  : labels:
+    - source: // Run starts the work.
+      style: primary
+      start: 33
+      end: 56
+    - source: Run
+      style: secondary
+      start: 114
+      end: 117
+    - source: func Run() {}
+      style: secondary
+      start: 109
+      end: 122
+    - source: //weeds-nl
+      style: secondary
+      start: 86
+      end: 96
+    - source: //weeds-nl
+      style: secondary
+      start: 98
+      end: 108
+  ? |
+    package p
+    //weeds-nl
+
+    //weeds-nl
+    // Run starts the work.
+    //weeds-nl
+    //go:noinline
+    //weeds-nl
+
+    //weeds-nl
+    func Run() {}
+  : labels:
+    - source: // Run starts the work.
+      style: primary
+      start: 33
+      end: 56
+    - source: Run
+      style: secondary
+      start: 110
+      end: 113
+    - source: func Run() {}
+      style: secondary
+      start: 105
+      end: 118
+    - source: //weeds-nl
+      style: secondary
+      start: 82
+      end: 92
+    - source: //weeds-nl
+      style: secondary
+      start: 94
+      end: 104
+  ? "package p\n//weeds-nl\n\n//weeds-nl\ntype T struct {\n//weeds-nl\n\t// A is a field.\n//weeds-nl\n\n//weeds-nl\n\tA int\n//weeds-nl\n}\n"
+  : labels:
+    - source: // A is a field.
+      style: primary
+      start: 61
+      end: 77
+    - source: A
+      style: secondary
+      start: 102
+      end: 103
+    - source: T
+      style: secondary
+      start: 38
+      end: 39
+    - source: "T struct {\n//weeds-nl\n\t// A is a field.\n//weeds-nl\n\n//weeds-nl\n\tA int\n//weeds-nl\n}"
+      style: secondary
+      start: 38
+      end: 120
+    - source: A int
+      style: secondary
+      start: 102
+      end: 107
+    - source: //weeds-nl
+      style: secondary
+      start: 78
+      end: 88
+    - source: //weeds-nl
+      style: secondary
+      start: 90
+      end: 100

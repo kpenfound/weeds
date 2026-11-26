@@ -6,7 +6,4 @@ files:
   - "**/internal/**"
   - "internal/**"
 rule:
-  all:
-    - kind: comment
-    - not:
-        matches: ts-directive
+  matches: ts-plain-comment

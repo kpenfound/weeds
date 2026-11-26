@@ -1,0 +1,25 @@
+id: ts-licence-header
+language: TypeScript
+severity: hint
+message: licence header
+rule:
+  all:
+    - matches: ts-leading
+    - not:
+        matches: ts-newline
+    - any:
+        - matches: ts-licence-line
+        - follows:
+            stopBy:
+              any:
+                - matches: ts-blank-line
+                - not:
+                    kind: comment
+            matches: ts-licence-line
+        - precedes:
+            stopBy:
+              any:
+                - matches: ts-blank-line
+                - not:
+                    kind: comment
+            matches: ts-licence-line
