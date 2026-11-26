@@ -75,6 +75,22 @@ type WeedsTests {
   }
 
   """
+  The shared listing yields each path once, whatever the backend returns: a
+  backend that reports one result per line of a file, or the same path with and
+  without a leading "./", gives the same list as one result per file.
+  """
+  pub listingRepeats: Void @check {
+    let w = weeds(ws: directory.withNewFile("README.md", "x\n").asWorkspace)
+    let once = ["a.go", "b/c.go", "d.txt"]
+    sameList("one result per file", once, w.listedPathsOf(["d.txt", "./a.go", "b/c.go"]))
+    sameList("one result per line", once, w.listedPathsOf(["a.go", "a.go", "a.go", "b/c.go", "b/c.go", "d.txt", "a.go", "d.txt"]))
+    sameList("with and without ./", once, w.listedPathsOf(["./a.go", "a.go", "./b/c.go", "b/c.go", "./d.txt", "./d.txt", "d.txt"]))
+    sameList("no results", [], w.listedPathsOf([]))
+    sameList("one result", ["a.go"], w.listedPathsOf(["./a.go"]))
+    null
+  }
+
+  """
   installed-skills and generate read only the skill folders: the skills
   directories with their contents, their agent directories as bare entries (a
   real directory, a symlink or a file), and AGENTS.md and CLAUDE.md. Nothing
@@ -276,7 +292,7 @@ type WeedsTests {
     expect(w.ripgrepGuard([]) == "ok", "no results must pass the ripgrep guard")
     let bare = w.ripgrepGuard([1, 0])
     expect(bare.contains("ripgrep") and bare.contains("ignore"), "results without submatches must fail naming ripgrep, got: " + bare)
-    sameList("a listing result without submatches, the shape of a match of no width, is listed and not judged", ["a.txt", "b.txt", "sub/c.txt"], w.listedPathsOf(["./a.txt", "./b.txt", "sub/c.txt"], [0, 1, 0]))
+    sameList("a listing result without submatches, the shape of a files-only search, is listed and not judged", ["a.txt", "b.txt", "sub/c.txt"], w.listedPathsOf(["./a.txt", "./b.txt", "sub/c.txt"]))
 
     let odd = directory
       .withNewFile(".git/HEAD", gitHead)

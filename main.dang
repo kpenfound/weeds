@@ -131,12 +131,12 @@ type Weeds {
   }
 
   """
-  The files the listing search reports for results with these paths, for
-  weeds-tests, whatever the results' submatches are: the listing never judges
-  ripgrep from its results. The submatch counts are the shape of each result.
+  The files the listing reports for search results with these paths, for
+  weeds-tests: sorted, each once, whether a path is repeated or comes with and
+  without a leading "./".
   """
-  pub listedPathsOf(paths: [String!]!, submatchCounts: [Int!]!): [String!]! {
-    listingPaths(paths.map { path, position => ListingRow(path: path, submatches: submatchCounts[position] ?? 0) })
+  pub listedPathsOf(paths: [String!]!): [String!]! {
+    listingPaths(paths)
   }
 
   """

@@ -108,24 +108,21 @@ type Upload {
 }
 
 # The listing search's pattern: the first byte of the text, in multiline mode.
-# It matches every non-empty file once, and every match consumes a byte, so
-# its submatch is never the empty, all-zero value that a zero-width match
-# such as \A reports. The byte class also matches a leading newline.
+# It matches every non-empty text file once. The search asks for files only,
+# so its work follows the number of files and not of lines, and a backend that
+# ignores the multiline flag still matches the start of every line.
 let listingPattern = "(?s-u:\\A.)"
 
-"""
-One result of the listing search: its file and how many submatches it carried.
-"""
-type ListingRow {
-  path: String!
-  submatches: Int!
-}
-
-# The files of a listing search's results, relative to the workspace root. A
-# result is listed whatever its submatch count: the probe has made the verdict
-# on ripgrep, and a result without submatches is not evidence of the fallback.
-let listingPaths(rows: [ListingRow!]!): [String!]! {
-  rows.map { row => row.path.trimPrefix("./") }
+# The files of a listing search's results: relative to the workspace root,
+# sorted, each once. The same file may come back in several results (a backend
+# that reports one result per line) and with or without a leading "./". One
+# sort puts equal paths side by side, and one pass over neighbours drops each
+# path that equals the one before it.
+let listingPaths(results: [String!]!): [String!]! {
+  let sorted = sortStrings(results.map { path => path.trimPrefix("./") })
+  sorted
+    .map { path, position => if (position > 0 and sorted[position - 1]! == path) { "" } else { path } }
+    .filter { path => path != "" }
 }
 
 # Tagged strings that sort a path's "in A" entry just before its "in B" entry,
@@ -262,16 +259,17 @@ type FileAccess {
   }
 
   """
-  The files every other part of the layer starts from: one search that returns
-  each non-empty text file once, unsorted. Empty files and files with NUL bytes
-  are not listed because ripgrep never matches them. Whether ripgrep backs the
+  The files every other part of the layer starts from: one files-only search
+  that returns each non-empty text file once, sorted, whatever number of results
+  the backend gives per file. Empty files and files with NUL bytes are not
+  listed because ripgrep never matches them. Whether ripgrep backs the
   search is decided by searchable's probe, not by these results.
   """
   listed: [String!]! {
     let found = searchable
-      .search(pattern: listingPattern, paths: ["/"], globs: skipGlobs, skipIgnored: true, multiline: true)
-      .{{filePath, submatches.{{start}}}}
-    listingPaths(found.map { hit => ListingRow(path: hit.filePath, submatches: hit.submatches.length) })
+      .search(pattern: listingPattern, paths: ["/"], globs: skipGlobs, skipIgnored: true, multiline: true, filesOnly: true)
+      .{{filePath}}
+    listingPaths(found.map { hit => hit.filePath })
   }
 
   """
@@ -382,7 +380,7 @@ type FileAccess {
   }
 
   """
-  Exhaustive listing, sorted: the files ripgrep sees. Only scanFiles and
+  Exhaustive listing, sorted, each file once: the files ripgrep sees. Only scanFiles and
   goLintModules evaluate it.
   """
   listing: [String!]! {
